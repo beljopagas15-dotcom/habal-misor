@@ -1,0 +1,2296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Habal-Habal MisOr | Free Online Booking</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <!-- Leaflet Interactive Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f1f5f9;
+      color: #0f172a;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    @keyframes soft-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.08); opacity: 0.75; }
+    }
+    .animate-soft-pulse {
+      animation: soft-pulse 1.8s infinite ease-in-out;
+    }
+
+    .moto-map-marker {
+      width: 38px;
+      height: 38px;
+      border-radius: 9999px;
+      background: #059669;
+      color: #ffffff;
+      border: 3px solid #ffffff;
+      box-shadow: 0 8px 18px rgba(5, 150, 105, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      transition: transform 0.2s ease;
+    }
+
+    .pin-pickup-marker {
+      width: 28px;
+      height: 28px;
+      border-radius: 9999px;
+      background: #10b981;
+      color: #ffffff;
+      border: 3px solid #ffffff;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .pin-dropoff-marker {
+      width: 28px;
+      height: 28px;
+      border-radius: 9999px;
+      background: #f59e0b;
+      color: #ffffff;
+      border: 3px solid #ffffff;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-900 flex flex-col items-center">
+
+  <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-[440px] pointer-events-none flex flex-col gap-2"></div>
+
+  <div id="confirm-modal" class="fixed inset-0 z-50 hidden bg-slate-900/50 flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-sm p-5 shadow-2xl">
+      <div class="flex items-center gap-3 mb-2">
+        <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+          <i class="fa-solid fa-circle-question text-lg"></i>
+        </div>
+        <h3 id="confirm-title" class="text-base font-bold text-slate-900">Confirm Action</h3>
+      </div>
+      <p id="confirm-message" class="text-sm text-slate-600 mb-5 leading-relaxed">Are you sure you want to continue?</p>
+      <div class="flex gap-2.5">
+        <button id="confirm-cancel-btn" type="button" onclick="playTapSound()" class="flex-1 min-h-[46px] px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition">
+          Cancel
+        </button>
+        <button id="confirm-ok-btn" type="button" onclick="playTapSound()" class="flex-1 min-h-[46px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition shadow-sm">
+          Yes, Continue
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="location-modal" class="fixed inset-0 z-50 hidden bg-slate-900/50 flex items-end sm:items-center justify-center sm:p-4">
+    <div class="bg-white w-full max-w-[480px] rounded-t-3xl sm:rounded-2xl border border-slate-200 shadow-2xl flex flex-col max-h-[85vh]">
+      <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <span id="location-modal-badge" class="text-[11px] font-bold uppercase tracking-wider text-emerald-600">Pickup Location</span>
+          <h3 id="location-modal-title" class="text-base font-extrabold text-slate-900">Select Barangay or Landmark</h3>
+        </div>
+        <button type="button" onclick="playTapSound(); closeLocationModal()" class="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="p-3.5 bg-slate-50 border-b border-slate-100 space-y-2.5">
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+          <input type="text" id="location-search-input" oninput="renderLocationModalList()" placeholder="Search barangay, market, school, landmark..."
+            class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-sm text-slate-900 outline-none" />
+        </div>
+
+        <div class="flex gap-1.5 overflow-x-auto pb-0.5">
+          <button type="button" onclick="playTapSound(); setModalCityFilter('ALL')" data-city="ALL" class="city-filter-pill px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-600 text-white shrink-0 transition">
+            All (74)
+          </button>
+          <button type="button" onclick="playTapSound(); setModalCityFilter('Alubijid')" data-city="Alubijid" class="city-filter-pill px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 shrink-0 transition">
+            Alubijid
+          </button>
+          <button type="button" onclick="playTapSound(); setModalCityFilter('Laguindingan')" data-city="Laguindingan" class="city-filter-pill px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 shrink-0 transition">
+            Laguindingan
+          </button>
+          <button type="button" onclick="playTapSound(); setModalCityFilter('El Salvador City')" data-city="El Salvador City" class="city-filter-pill px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 shrink-0 transition">
+            El Salvador
+          </button>
+          <button type="button" onclick="playTapSound(); setModalCityFilter('Opol')" data-city="Opol" class="city-filter-pill px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 shrink-0 transition">
+            Opol
+          </button>
+        </div>
+      </div>
+
+      <div id="location-modal-list" class="flex-1 overflow-y-auto divide-y divide-slate-100 p-2"></div>
+    </div>
+  </div>
+
+  <div class="w-full max-w-[480px] min-h-screen bg-slate-50 shadow-xl border-x border-slate-200/80 flex flex-col">
+
+    <header class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 pt-3.5 pb-3">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-600/20 shrink-0">
+            <i class="fa-solid fa-motorcycle text-lg"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <h1 class="font-extrabold text-base tracking-tight text-slate-900 truncate">Habal-Habal MisOr</h1>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">FREE</span>
+            </div>
+            <p class="text-[11px] text-slate-500 truncate">Alubijid • Laguindingan • El Salvador • Opol</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button type="button" id="btn-sound-toggle" onclick="toggleSoundSystem()" title="Toggle Loud Alerts & Tap Sounds"
+            class="min-h-[34px] px-2.5 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 text-[11px] font-bold flex items-center gap-1 transition">
+            <i id="sound-icon" class="fa-solid fa-volume-high"></i>
+            <span id="sound-label">Sound ON</span>
+          </button>
+
+          <div class="flex items-center gap-1 px-2 py-1 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-semibold text-slate-600">
+            <span id="sync-dot" class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span id="sync-label">Live</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-1.5 p-1 mt-3 bg-slate-100 rounded-xl border border-slate-200/80">
+        <button id="btn-tab-passenger" type="button" onclick="playTapSound(); switchRoleTab('passenger')"
+          class="min-h-[42px] px-3 rounded-lg text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all bg-white text-emerald-700 shadow-xs">
+          <i class="fa-solid fa-user"></i>
+          <span>Passenger</span>
+        </button>
+        <button id="btn-tab-rider" type="button" onclick="playTapSound(); switchRoleTab('rider')"
+          class="min-h-[42px] px-3 rounded-lg text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all text-slate-500 hover:text-slate-800">
+          <i class="fa-solid fa-helmet-safety"></i>
+          <span>Rider Dashboard</span>
+          <span id="header-pending-badge" class="hidden px-1.5 py-0.5 text-[10px] rounded-full bg-amber-500 text-white font-extrabold">0</span>
+        </button>
+      </div>
+    </header>
+
+    <main id="view-passenger" class="flex-1 p-4 space-y-4">
+
+      <section id="passenger-tracker-card" class="hidden bg-white rounded-2xl border-2 border-emerald-500 p-4 shadow-md space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-3">
+            <div id="tracker-status-icon" class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center animate-soft-pulse">
+              <i class="fa-solid fa-magnifying-glass-location"></i>
+            </div>
+            <div>
+              <span id="tracker-status-title" class="text-xs font-extrabold uppercase tracking-wider text-amber-600">Finding a Rider...</span>
+              <p id="tracker-booking-code" class="text-xs text-slate-400 font-mono">Booking #---</p>
+            </div>
+          </div>
+          <div class="text-right">
+            <span class="text-[11px] text-slate-400 block">Fare</span>
+            <span id="tracker-fare" class="text-xl font-extrabold text-amber-600">₱0</span>
+          </div>
+        </div>
+
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="font-bold text-slate-700 flex items-center gap-1.5">
+              <i class="fa-solid fa-route text-emerald-600"></i>
+              <span id="passenger-map-caption">Highway Route & Rider Position</span>
+            </span>
+            <span id="passenger-rider-eta" class="font-bold text-emerald-700">Live GPS</span>
+          </div>
+          <div id="passenger-live-map" class="w-full h-52 rounded-xl border border-slate-200 overflow-hidden z-10"></div>
+        </div>
+
+        <div class="bg-slate-50 rounded-xl p-3.5 space-y-2.5 border border-slate-200/70">
+          <div class="flex items-start gap-2.5">
+            <i class="fa-solid fa-circle-dot text-emerald-600 text-xs mt-1"></i>
+            <div class="flex-1">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-[10px] font-bold uppercase text-slate-400">Pickup</span>
+                <span id="tracker-pickup-method" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">Selected Place</span>
+              </div>
+              <p id="tracker-pickup" class="text-sm font-bold text-slate-900 mt-0.5">---</p>
+              <p id="tracker-pickup-note" class="text-xs text-slate-600 mt-0.5 hidden"></p>
+            </div>
+          </div>
+          <div class="border-l-2 border-dashed border-slate-300 h-2.5 ml-1.5"></div>
+          <div class="flex items-start gap-2.5">
+            <i class="fa-solid fa-location-dot text-amber-600 text-xs mt-1"></i>
+            <div class="flex-1">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-[10px] font-bold uppercase text-slate-400">Drop-off</span>
+                <span id="tracker-dropoff-method" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">Selected Destination</span>
+              </div>
+              <p id="tracker-dropoff" class="text-sm font-bold text-slate-900 mt-0.5">---</p>
+              <p id="tracker-dropoff-note" class="text-xs text-slate-600 mt-0.5 hidden"></p>
+            </div>
+          </div>
+        </div>
+
+        <div id="tracker-rider-box" class="hidden bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 space-y-3">
+          <div class="flex items-center gap-3">
+            <div class="w-11 h-11 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+              <i class="fa-solid fa-helmet-safety text-lg"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <span class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 block">Rider Assigned!</span>
+              <h4 id="tracker-rider-name" class="text-base font-extrabold text-slate-900 truncate">Rider Name</h4>
+              <p id="tracker-rider-vehicle" class="text-xs font-medium text-slate-700 truncate">Honda TMX • ABC 123</p>
+            </div>
+          </div>
+
+          <a id="tracker-call-rider-link" href="tel:" onclick="playTapSound()"
+            class="w-full min-h-[48px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition">
+            <i class="fa-solid fa-phone"></i>
+            <span>Call Rider</span>
+          </a>
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <span id="tracker-helper-text" class="text-xs text-slate-500">Moto moves only when rider moves.</span>
+          <button type="button" onclick="playTapSound(); cancelActivePassengerBooking()"
+            class="min-h-[40px] px-3.5 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 font-semibold text-xs border border-slate-200 transition">
+            Cancel Ride
+          </button>
+        </div>
+      </section>
+
+      <section id="passenger-booking-card" class="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-lg font-extrabold text-slate-900">Where are you heading?</h2>
+            <p class="text-xs text-slate-500">Set clear Pickup & Drop-off locations for your rider.</p>
+          </div>
+          <span class="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
+            ₱0 App Fee
+          </span>
+        </div>
+
+        <form id="passenger-form" onsubmit="submitPassengerBooking(event)" class="space-y-4">
+
+          <div class="space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <label class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+                <span>Pickup Location *</span>
+                <span id="pickup-set-badge" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">Selected</span>
+              </label>
+              <button type="button" id="btn-use-gps" onclick="playTapSound(); toggleLiveGPS()"
+                class="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition shrink-0">
+                <i class="fa-solid fa-location-crosshairs"></i>
+                <span id="btn-gps-label">Live GPS</span>
+              </button>
+            </div>
+
+            <button type="button" onclick="playTapSound(); openLocationModal('pickup')"
+              class="w-full min-h-[50px] px-3.5 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 focus:border-emerald-500 text-left flex items-center justify-between gap-2 transition">
+              <div class="min-w-0 flex-1">
+                <span id="pickup-display-city" class="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">Alubijid</span>
+                <span id="pickup-display-name" class="text-sm font-bold text-slate-900 truncate block">Alubijid Public Market / Terminal</span>
+              </div>
+              <span class="text-xs font-semibold text-emerald-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shrink-0">
+                Change
+              </span>
+            </button>
+
+            <div id="gps-status-badge" class="hidden text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 flex items-center justify-between gap-2">
+              <span id="gps-coords-text" class="truncate"><i class="fa-solid fa-satellite-dish mr-1"></i> Live GPS Active</span>
+              <button type="button" onclick="playTapSound(); clearCustomGPS()" class="text-slate-600 hover:text-slate-900 underline font-semibold shrink-0">Stop GPS</button>
+            </div>
+
+            <input type="text" id="input-pickup-note" oninput="updateBookingPreviewMap()" placeholder="Exact Pickup Landmark / Purok (e.g. Zone 3 across the store)"
+              class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 text-sm text-slate-900 placeholder-slate-400 outline-none transition" />
+          </div>
+
+          <div class="relative flex items-center justify-center my-1">
+            <div class="border-t border-slate-200 w-full"></div>
+            <button type="button" onclick="playTapSound(); swapPickupAndDropoff()" title="Swap Pickup and Drop-off"
+              class="relative z-10 w-9 h-9 rounded-full bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 hover:text-emerald-600 shadow-xs flex items-center justify-center transition">
+              <i class="fa-solid fa-up-down text-xs"></i>
+            </button>
+            <div class="border-t border-slate-200 w-full"></div>
+          </div>
+
+          <div class="space-y-2">
+            <label class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+              <span>Drop-off Location *</span>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700">Destination</span>
+            </label>
+
+            <button type="button" onclick="playTapSound(); openLocationModal('dropoff')"
+              class="w-full min-h-[50px] px-3.5 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 focus:border-emerald-500 text-left flex items-center justify-between gap-2 transition">
+              <div class="min-w-0 flex-1">
+                <span id="dropoff-display-city" class="text-[10px] font-bold uppercase tracking-wider text-amber-600 block">Laguindingan</span>
+                <span id="dropoff-display-name" class="text-sm font-bold text-slate-900 truncate block">Laguindingan Airport (Passenger Terminal / Gate)</span>
+              </div>
+              <span class="text-xs font-semibold text-emerald-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shrink-0">
+                Change
+              </span>
+            </button>
+
+            <input type="text" id="input-dropoff-note" placeholder="Exact Drop-off Landmark / Purok (e.g. Near the covered court)"
+              class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 text-sm text-slate-900 placeholder-slate-400 outline-none transition" />
+          </div>
+
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="font-bold text-slate-700 flex items-center gap-1.5">
+                <i class="fa-solid fa-route text-emerald-600"></i>
+                <span id="preview-route-caption">Highway Route & Rider GPS</span>
+              </span>
+              <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                <i class="fa-solid fa-road mr-1"></i>Highway Path
+              </span>
+            </div>
+            <div id="booking-preview-map" class="w-full h-44 rounded-xl border border-slate-200 overflow-hidden z-10"></div>
+          </div>
+
+          <div class="rounded-2xl bg-amber-50/90 border border-amber-200 p-3.5 flex items-center justify-between">
+            <div>
+              <span class="text-[11px] font-bold uppercase tracking-wider text-amber-800 block">Estimated Fare</span>
+              <div class="flex items-center gap-2 mt-0.5">
+                <span id="summary-distance" class="text-xs font-extrabold text-slate-800">~6.9 km</span>
+                <span class="text-slate-400">•</span>
+                <span class="text-[11px] text-slate-600">Base ₱20 + ₱10/km</span>
+              </div>
+            </div>
+            <div class="text-right">
+              <span id="summary-fare" class="text-2xl font-extrabold text-amber-600">₱90</span>
+              <span class="block text-[10px] font-semibold text-slate-500">Cash to Rider</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Your Name *</label>
+              <input type="text" id="input-passenger-name" required placeholder="e.g. Maria Santos"
+                class="w-full min-h-[46px] px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Mobile Number *</label>
+              <input type="tel" id="input-passenger-phone" required placeholder="09XX XXX XXXX"
+                class="w-full min-h-[46px] px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+            </div>
+          </div>
+
+          <button type="submit" id="btn-submit-booking"
+            class="w-full min-h-[52px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-extrabold text-base shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 transition">
+            <i class="fa-solid fa-motorcycle"></i>
+            <span>Book Habal-Habal Now</span>
+          </button>
+        </form>
+      </section>
+
+      <div class="bg-white rounded-2xl border border-slate-200/80 p-3.5 flex items-center gap-3 text-xs text-slate-600">
+        <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+          <i class="fa-solid fa-shield-halved"></i>
+        </div>
+        <p><strong>100% Direct to Rider:</strong> Zero commission deducted. Please wear a helmet on every trip.</p>
+      </div>
+    </main>
+
+    <main id="view-rider" class="hidden flex-1 p-4 space-y-4">
+
+      <section class="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-4">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="text-base font-extrabold text-slate-900">Rider Status</h2>
+              <span class="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                ₱0 Commission
+              </span>
+            </div>
+            <p id="rider-status-desc" class="text-xs text-slate-500 mt-0.5">Turn ON to start receiving bookings</p>
+          </div>
+
+          <button type="button" id="btn-rider-toggle" onclick="playTapSound(); toggleRiderOnlineStatus()"
+            class="min-h-[46px] px-4 rounded-xl font-extrabold text-xs uppercase tracking-wider flex items-center gap-2 border transition shadow-xs bg-slate-100 text-slate-600 border-slate-300">
+            <span id="rider-toggle-dot" class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+            <span id="rider-toggle-text">OFFLINE</span>
+          </button>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+                <i class="fa-solid fa-id-badge"></i>
+              </div>
+              <div class="min-w-0">
+                <p id="rider-card-name" class="text-sm font-bold text-slate-900 truncate">No Rider Profile Set</p>
+                <p id="rider-card-motor" class="text-xs text-slate-500 truncate">Set your name, motorcycle, and plate number</p>
+              </div>
+            </div>
+            <button type="button" onclick="playTapSound(); toggleRiderProfileForm()"
+              class="min-h-[38px] px-3 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs shrink-0 transition">
+              <i class="fa-solid fa-pen-to-square mr-1"></i>Edit
+            </button>
+          </div>
+
+          <form id="rider-profile-form" onsubmit="saveRiderProfileForm(event)" class="hidden mt-3.5 pt-3.5 border-t border-slate-100 space-y-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Rider Name *</label>
+              <input type="text" id="rider-input-name" required placeholder="e.g. Rider Junjun"
+                class="w-full min-h-[44px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+            </div>
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Plate Number *</label>
+                <input type="text" id="rider-input-plate" required placeholder="e.g. 1024-ABC"
+                  class="w-full min-h-[44px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 uppercase outline-none" />
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-700 mb-1">Mobile Number *</label>
+                <input type="tel" id="rider-input-phone" required placeholder="09XX XXX XXXX"
+                  class="w-full min-h-[44px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Motorcycle Model & Color *</label>
+              <input type="text" id="rider-input-motor" required placeholder="e.g. Honda TMX 125 (Black)"
+                class="w-full min-h-[44px] px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+            </div>
+            <button type="submit" onclick="playTapSound()"
+              class="w-full min-h-[46px] rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm transition">
+              Save Rider Profile
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <section class="bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-xs space-y-2">
+        <div class="flex items-center justify-between text-xs">
+          <span class="font-extrabold text-slate-900 flex items-center gap-1.5">
+            <i class="fa-solid fa-motorcycle text-emerald-600"></i>
+            <span>Live Rider & Highway Map</span>
+          </span>
+          <span id="rider-map-status" class="text-[11px] font-bold text-emerald-700">Waiting for GPS movement</span>
+        </div>
+        <div id="rider-live-map" class="w-full h-48 rounded-xl border border-slate-200 overflow-hidden z-10"></div>
+      </section>
+
+      <section class="grid grid-cols-2 gap-3">
+        <div class="bg-white rounded-2xl border border-slate-200/90 p-3.5 shadow-xs">
+          <span class="text-[11px] font-bold text-slate-500 block">Completed Trips</span>
+          <div class="flex items-baseline justify-between mt-1">
+            <span id="stat-trips-count" class="text-2xl font-extrabold text-slate-900">0</span>
+            <span class="text-[11px] font-semibold text-slate-400">Trips</span>
+          </div>
+        </div>
+        <div class="bg-white rounded-2xl border border-emerald-200 p-3.5 shadow-xs">
+          <span class="text-[11px] font-bold text-emerald-700 block">Your Earnings (100%)</span>
+          <div class="flex items-baseline justify-between mt-1">
+            <span id="stat-earnings-total" class="text-2xl font-extrabold text-emerald-600">₱0</span>
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700">Free</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="rider-current-ride-section" class="hidden space-y-2">
+        <h3 class="text-xs font-extrabold uppercase tracking-wider text-emerald-700 flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-600 animate-ping"></span>
+          <span>Your Active Passenger</span>
+        </h3>
+        <div id="rider-current-ride-card" class="bg-white rounded-2xl border-2 border-emerald-600 p-4 shadow-md space-y-3.5"></div>
+      </section>
+
+      <section class="space-y-2.5">
+        <div class="flex items-center justify-between">
+          <h3 class="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+            <i class="fa-solid fa-bell text-amber-500"></i>
+            <span>Incoming Bookings (Pending)</span>
+          </h3>
+          <span id="pending-pill-count" class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700">0</span>
+        </div>
+
+        <div id="rider-offline-box" class="bg-white rounded-2xl border border-dashed border-slate-300 p-6 text-center space-y-2">
+          <div class="w-11 h-11 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mx-auto">
+            <i class="fa-solid fa-power-off"></i>
+          </div>
+          <h4 class="text-sm font-bold text-slate-800">You are currently OFFLINE</h4>
+          <p class="text-xs text-slate-500 max-w-xs mx-auto">Tap the <strong>OFFLINE</strong> button above to go <strong>ONLINE</strong> and receive ride requests.</p>
+        </div>
+
+        <div id="rider-pending-feed" class="hidden space-y-3"></div>
+      </section>
+
+    </main>
+
+    <footer class="mt-auto border-t border-slate-200 bg-white px-4 py-3 flex items-center justify-between text-[11px] text-slate-500">
+      <span>Alubijid • Laguindingan • El Salvador • Opol</span>
+      <button type="button" onclick="playTapSound(); createSampleTestBooking()" class="font-bold text-emerald-700 hover:underline">
+        + Test Booking
+      </button>
+    </footer>
+
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, doc, addDoc, updateDoc, onSnapshot, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const LOCATIONS = [
+      { id: "alu_poblacion", city: "Alubijid", name: "Poblacion / Municipal Hall (Alubijid)", lat: 8.5675, lng: 124.4750 },
+      { id: "alu_market", city: "Alubijid", name: "Alubijid Public Market / Terminal", lat: 8.5668, lng: 124.4765 },
+      { id: "alu_ustp", city: "Alubijid", name: "USTP Alubijid Campus", lat: 8.5612, lng: 124.4820 },
+      { id: "alu_hospital", city: "Alubijid", name: "Alubijid Provincial Hospital", lat: 8.5655, lng: 124.4718 },
+      { id: "alu_baybay", city: "Alubijid", name: "Brgy. Baybay, Alubijid", lat: 8.5740, lng: 124.4760 },
+      { id: "alu_benigwayan", city: "Alubijid", name: "Brgy. Benigwayan, Alubijid", lat: 8.5230, lng: 124.4620 },
+      { id: "alu_calatcat", city: "Alubijid", name: "Brgy. Calatcat, Alubijid", lat: 8.5140, lng: 124.4510 },
+      { id: "alu_lagtang", city: "Alubijid", name: "Brgy. Lagtang, Alubijid", lat: 8.5450, lng: 124.4580 },
+      { id: "alu_lanao", city: "Alubijid", name: "Brgy. Lanao, Alubijid", lat: 8.5580, lng: 124.4640 },
+      { id: "alu_loguilo", city: "Alubijid", name: "Brgy. Loguilo, Alubijid", lat: 8.5620, lng: 124.4880 },
+      { id: "alu_lourdes", city: "Alubijid", name: "Brgy. Lourdes, Alubijid", lat: 8.5480, lng: 124.4750 },
+      { id: "alu_lumbo", city: "Alubijid", name: "Brgy. Lumbo, Alubijid", lat: 8.5320, lng: 124.4780 },
+      { id: "alu_molocboloc", city: "Alubijid", name: "Brgy. Molocboloc, Alubijid", lat: 8.5690, lng: 124.4630 },
+      { id: "alu_sampatulog", city: "Alubijid", name: "Brgy. Sampatulog, Alubijid", lat: 8.5180, lng: 124.4720 },
+      { id: "alu_sungay", city: "Alubijid", name: "Brgy. Sungay, Alubijid", lat: 8.5350, lng: 124.4860 },
+      { id: "alu_talaba", city: "Alubijid", name: "Brgy. Talaba, Alubijid", lat: 8.5520, lng: 124.4920 },
+      { id: "alu_taparak", city: "Alubijid", name: "Brgy. Taparak, Alubijid", lat: 8.5050, lng: 124.4650 },
+      { id: "alu_tugasnon", city: "Alubijid", name: "Brgy. Tugasnon, Alubijid", lat: 8.5260, lng: 124.4910 },
+      { id: "alu_tula", city: "Alubijid", name: "Brgy. Tula, Alubijid", lat: 8.4980, lng: 124.4580 },
+
+      { id: "lag_airport", city: "Laguindingan", name: "Laguindingan Airport (Passenger Terminal / Gate)", lat: 8.6115, lng: 124.4565 },
+      { id: "lag_poblacion", city: "Laguindingan", name: "Poblacion / Municipal Hall (Laguindingan)", lat: 8.5835, lng: 124.4675 },
+      { id: "lag_market", city: "Laguindingan", name: "Laguindingan Public Market / Highway Junction", lat: 8.5795, lng: 124.4690 },
+      { id: "lag_moog", city: "Laguindingan", name: "Brgy. Moog, Laguindingan", lat: 8.6040, lng: 124.4610 },
+      { id: "lag_kibaghot", city: "Laguindingan", name: "Brgy. Kibaghot, Laguindingan", lat: 8.5950, lng: 124.4540 },
+      { id: "lag_aromahon", city: "Laguindingan", name: "Brgy. Aromahon, Laguindingan", lat: 8.5890, lng: 124.4510 },
+      { id: "lag_gasi", city: "Laguindingan", name: "Brgy. Gasi, Laguindingan", lat: 8.5760, lng: 124.4560 },
+      { id: "lag_lapad", city: "Laguindingan", name: "Brgy. Lapad, Laguindingan", lat: 8.5880, lng: 124.4740 },
+      { id: "lag_liberty", city: "Laguindingan", name: "Brgy. Liberty, Laguindingan", lat: 8.5680, lng: 124.4520 },
+      { id: "lag_mauswagon", city: "Laguindingan", name: "Brgy. Mauswagon, Laguindingan", lat: 8.5785, lng: 124.4720 },
+      { id: "lag_sambulawan", city: "Laguindingan", name: "Brgy. Sambulawan, Laguindingan", lat: 8.5610, lng: 124.4450 },
+      { id: "lag_sinai", city: "Laguindingan", name: "Brgy. Sinai, Laguindingan", lat: 8.5980, lng: 124.4780 },
+      { id: "lag_tubajon", city: "Laguindingan", name: "Brgy. Tubajon, Laguindingan", lat: 8.6150, lng: 124.4680 },
+
+      { id: "els_poblacion", city: "El Salvador City", name: "Poblacion / City Hall (El Salvador City)", lat: 8.5565, lng: 124.5235 },
+      { id: "els_divine_mercy", city: "El Salvador City", name: "Divine Mercy Shrine (Ulaliman)", lat: 8.5625, lng: 124.5345 },
+      { id: "els_market", city: "El Salvador City", name: "El Salvador Public Market / Terminal", lat: 8.5550, lng: 124.5250 },
+      { id: "els_gaisano", city: "El Salvador City", name: "Gaisano Capital El Salvador / Highway", lat: 8.5525, lng: 124.5285 },
+      { id: "els_hospital", city: "El Salvador City", name: "El Salvador City Hospital", lat: 8.5515, lng: 124.5210 },
+      { id: "els_ustp", city: "El Salvador City", name: "USTP El Salvador Campus", lat: 8.5485, lng: 124.5315 },
+      { id: "els_sinaloc", city: "El Salvador City", name: "Brgy. Sinaloc (Zone 1–7 / Highway)", lat: 8.5615, lng: 124.5085 },
+      { id: "els_molugan", city: "El Salvador City", name: "Brgy. Molugan (Highway / Upper)", lat: 8.5380, lng: 124.5520 },
+      { id: "els_amoros", city: "El Salvador City", name: "Brgy. Amoros, El Salvador City", lat: 8.5465, lng: 124.5390 },
+      { id: "els_taytay", city: "El Salvador City", name: "Brgy. Taytay, El Salvador City", lat: 8.5635, lng: 124.5210 },
+      { id: "els_cogon", city: "El Salvador City", name: "Brgy. Cogon, El Salvador City", lat: 8.5495, lng: 124.5160 },
+      { id: "els_kibonbon", city: "El Salvador City", name: "Brgy. Kibonbon, El Salvador City", lat: 8.5280, lng: 124.5150 },
+      { id: "els_hinigdaan", city: "El Salvador City", name: "Brgy. Hinigdaan, El Salvador City", lat: 8.5150, lng: 124.5380 },
+      { id: "els_bolisong", city: "El Salvador City", name: "Brgy. Bolisong, El Salvador City", lat: 8.5340, lng: 124.5260 },
+      { id: "els_kalabaylabay", city: "El Salvador City", name: "Brgy. Kalabaylabay, El Salvador City", lat: 8.5190, lng: 124.5240 },
+      { id: "els_himaya", city: "El Salvador City", name: "Brgy. Himaya, El Salvador City", lat: 8.5260, lng: 124.5480 },
+      { id: "els_sambulawan", city: "El Salvador City", name: "Brgy. Sambulawan, El Salvador City", lat: 8.5040, lng: 124.5290 },
+      { id: "els_ulaliman", city: "El Salvador City", name: "Brgy. Ulaliman, El Salvador City", lat: 8.5605, lng: 124.5330 },
+      { id: "els_quibonbon", city: "El Salvador City", name: "Brgy. Quibonbon, El Salvador City", lat: 8.5390, lng: 124.5040 },
+      { id: "els_san_francisco", city: "El Salvador City", name: "Brgy. San Francisco de Asis, El Salvador City", lat: 8.5080, lng: 124.5140 },
+
+      { id: "opol_mun_hall", city: "Opol", name: "Opol Municipal Hall / Poblacion Plaza", lat: 8.5165, lng: 124.5735 },
+      { id: "opol_market", city: "Opol", name: "Opol Public Market / Highway Junction", lat: 8.5178, lng: 124.5752 },
+      { id: "opol_osnts", city: "Opol", name: "Opol Secondary National Technical School (OSNTS)", lat: 8.5135, lng: 124.5710 },
+      { id: "opol_seven_seas", city: "Opol", name: "Seven Seas Waterpark & Resort (Barra, Opol)", lat: 8.5082, lng: 124.5968 },
+      { id: "opol_apple_tree", city: "Opol", name: "Apple Tree Resort & Hotel (Taboc, Opol)", lat: 8.5122, lng: 124.5885 },
+      { id: "opol_youngsville", city: "Opol", name: "Youngsville Subdivision (Igpit, Opol)", lat: 8.5055, lng: 124.5850 },
+      { id: "opol_cambridge", city: "Opol", name: "Cambridge Subdivision (Igpit, Opol)", lat: 8.5042, lng: 124.5872 },
+      { id: "opol_xavier_ecoville", city: "Opol", name: "Xavier Ecoville (Luyong Bonbon, Opol)", lat: 8.4965, lng: 124.5790 },
+      { id: "opol_poblacion", city: "Opol", name: "Barangay Poblacion, Opol", lat: 8.5165, lng: 124.5735 },
+      { id: "opol_barra", city: "Opol", name: "Barangay Barra, Opol", lat: 8.5075, lng: 124.5985 },
+      { id: "opol_igpit", city: "Opol", name: "Barangay Igpit, Opol", lat: 8.5068, lng: 124.5860 },
+      { id: "opol_taboc", city: "Opol", name: "Barangay Taboc, Opol", lat: 8.5125, lng: 124.5842 },
+      { id: "opol_bonbon", city: "Opol", name: "Barangay Bonbon, Opol", lat: 8.5192, lng: 124.5665 },
+      { id: "opol_luyong_bonbon", city: "Opol", name: "Barangay Luyong Bonbon, Opol", lat: 8.5025, lng: 124.5765 },
+      { id: "opol_malanang", city: "Opol", name: "Barangay Malanang, Opol", lat: 8.4885, lng: 124.5645 },
+      { id: "opol_patag", city: "Opol", name: "Barangay Patag, Opol", lat: 8.5245, lng: 124.5585 },
+      { id: "opol_awang", city: "Opol", name: "Barangay Awang, Opol", lat: 8.4725, lng: 124.5520 },
+      { id: "opol_bagocboc", city: "Opol", name: "Barangay Bagocboc, Opol", lat: 8.4250, lng: 124.5310 },
+      { id: "opol_cauyunan", city: "Opol", name: "Barangay Cauyunan, Opol", lat: 8.4480, lng: 124.5420 },
+      { id: "opol_limonda", city: "Opol", name: "Barangay Limonda, Opol", lat: 8.3950, lng: 124.5150 },
+      { id: "opol_nangcaon", city: "Opol", name: "Barangay Nangcaon, Opol", lat: 8.4120, lng: 124.5250 },
+      { id: "opol_tingalan", city: "Opol", name: "Barangay Tingalan, Opol", lat: 8.3820, lng: 124.5080 }
+    ];
+
+    const BASE_FARE = 20;
+    const RATE_PER_KM = 10;
+    const ROAD_FACTOR = 1.28;
+    const STORAGE_KEY_BOOKINGS = "habal_misor_bookings_v6";
+    const STORAGE_KEY_RIDER = "habal_misor_rider_profile_v6";
+    const STORAGE_KEY_ACTIVE_PASSENGER_ID = "habal_misor_passenger_active_id_v6";
+    const CHANNEL_NAME = "habal_misor_realtime_channel_v6";
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'habal-misor-free';
+    let db = null;
+    let auth = null;
+    let currentUser = null;
+    let isFirebaseLive = false;
+    let realtimeChannel = null;
+
+    let soundEnabled = true;
+    let audioCtx = null;
+    let knownPendingIds = new Set();
+    let initialSnapshotLoaded = false;
+
+    let selectedPickupId = "alu_market";
+    let selectedDropoffId = "lag_airport";
+    let customPickupCoords = null;
+    let liveGpsWatchId = null;
+    let lastLiveGpsPushMs = 0;
+
+    let riderGpsWatchId = null;
+    // Rider position starts stationary at initial point and ONLY moves when actual coordinates update
+    let riderActualPos = { lat: 8.5675, lng: 124.4750 };
+    let hasRealRiderMoved = false;
+
+    let modalTargetField = "pickup";
+    let modalCityFilter = "ALL";
+
+    let allBookings = [];
+    let passengerActiveBookingId = localStorage.getItem(STORAGE_KEY_ACTIVE_PASSENGER_ID) || null;
+    let riderProfile = loadSavedRiderProfile();
+
+    let bookingPreviewMap = null;
+    let passengerLiveMap = null;
+    let riderLiveMap = null;
+
+    // Cache highway routes by "lat1,lng1->lat2,lng2"
+    const routeCache = new Map();
+
+    // =========================================================================
+    // LOUD SOUND ENGINE (EVERY TAP + NEW BOOKING ALERT + ACCEPT CHIME)
+    // =========================================================================
+    function getAudioContext() {
+      if (!soundEnabled) return null;
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) {
+          audioCtx = new AudioContextClass();
+        }
+      }
+      if (audioCtx && audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
+      return audioCtx;
+    }
+
+    function playTone(freq, durationSec, type = "triangle", gainPeak = 0.85, delaySec = 0) {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const now = ctx.currentTime + delaySec;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, now);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.exponentialRampToValueAtTime(gainPeak, now + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + durationSec);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + durationSec + 0.02);
+    }
+
+    window.playTapSound = function () {
+      if (!soundEnabled) return;
+      playTone(760, 0.075, "triangle", 0.55, 0);
+      playTone(1040, 0.06, "sine", 0.35, 0.035);
+    };
+
+    function playLoudBookingAlert() {
+      if (!soundEnabled) return;
+      for (let burst = 0; burst < 2; burst++) {
+        const base = burst * 0.42;
+        playTone(880, 0.14, "sawtooth", 0.9, base);
+        playTone(1174.66, 0.14, "square", 0.85, base + 0.11);
+        playTone(1567.98, 0.18, "triangle", 1.0, base + 0.22);
+      }
+    }
+
+    function playAcceptSound() {
+      if (!soundEnabled) return;
+      playTone(659.25, 0.14, "triangle", 0.9, 0);
+      playTone(880.0, 0.16, "triangle", 0.95, 0.12);
+      playTone(1318.5, 0.26, "sine", 1.0, 0.24);
+    }
+
+    window.toggleSoundSystem = function () {
+      soundEnabled = !soundEnabled;
+      const icon = document.getElementById("sound-icon");
+      const label = document.getElementById("sound-label");
+      const btn = document.getElementById("btn-sound-toggle");
+
+      if (soundEnabled) {
+        icon.className = "fa-solid fa-volume-high";
+        label.textContent = "Sound ON";
+        btn.className = "min-h-[34px] px-2.5 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 text-[11px] font-bold flex items-center gap-1 transition";
+        playAcceptSound();
+        showToast("Loud booking & tap sounds ON!", "success");
+      } else {
+        icon.className = "fa-solid fa-volume-xmark";
+        label.textContent = "Muted";
+        btn.className = "min-h-[34px] px-2.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-600 text-[11px] font-bold flex items-center gap-1 transition";
+      }
+    };
+
+    // =========================================================================
+    // HIGHWAY ROUTING (OSRM) + ESRI MAP + STATIONARY/REAL-MOVEMENT MOTO ICON
+    // =========================================================================
+    async function fetchHighwayRoute(fromCoords, toCoords) {
+      if (!fromCoords || !toCoords) return null;
+      const key = `${fromCoords.lat.toFixed(5)},${fromCoords.lng.toFixed(5)}->${toCoords.lat.toFixed(5)},${toCoords.lng.toFixed(5)}`;
+      if (routeCache.has(key)) return routeCache.get(key);
+
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${fromCoords.lng},${fromCoords.lat};${toCoords.lng},${toCoords.lat}?overview=full&geometries=geojson`;
+        const resp = await fetch(url, { signal: AbortSignal.timeout(4500) });
+        if (!resp.ok) throw new Error("OSRM response not OK");
+        const data = await resp.json();
+        const route = data && data.routes && data.routes[0];
+        if (!route || !route.geometry || !Array.isArray(route.geometry.coordinates)) {
+          throw new Error("No geometry");
+        }
+        const latLngs = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+        const distanceKm = Math.max(1.0, Number((route.distance / 1000).toFixed(1)));
+        const result = { latLngs, distanceKm, isHighway: true };
+        routeCache.set(key, result);
+        return result;
+      } catch (e) {
+        const straightKm = computeHaversineKm(fromCoords.lat, fromCoords.lng, toCoords.lat, toCoords.lng);
+        const fallbackKm = Math.max(1.0, Number((straightKm * ROAD_FACTOR).toFixed(1)));
+        return {
+          latLngs: [[fromCoords.lat, fromCoords.lng], [toCoords.lat, toCoords.lng]],
+          distanceKm: fallbackKm,
+          isHighway: false
+        };
+      }
+    }
+
+    function applyFareFromDistance(distanceKm) {
+      const rawFare = BASE_FARE + distanceKm * RATE_PER_KM;
+      const fare = Math.max(BASE_FARE, Math.ceil(rawFare / 5) * 5);
+      document.getElementById("summary-distance").textContent = `~${distanceKm} km`;
+      document.getElementById("summary-fare").textContent = `₱${fare}`;
+      return fare;
+    }
+
+    function createMotoDivIcon(labelText = "MOTO") {
+      return L.divIcon({
+        className: "",
+        html: `<div class="moto-map-marker" title="${escapeHTML(labelText)}"><i class="fa-solid fa-motorcycle"></i></div>`,
+        iconSize: [38, 38],
+        iconAnchor: [19, 19]
+      });
+    }
+
+    function createPickupPinIcon() {
+      return L.divIcon({
+        className: "",
+        html: `<div class="pin-pickup-marker">P</div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+    }
+
+    function createDropoffPinIcon() {
+      return L.divIcon({
+        className: "",
+        html: `<div class="pin-dropoff-marker">D</div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+    }
+
+    function addOsmTileLayer(map) {
+      const esriStreets = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
+        maxZoom: 19,
+        attribution: "Tiles &copy; Esri"
+      });
+
+      const esriTopo = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}", {
+        maxZoom: 19,
+        attribution: "Tiles &copy; Esri"
+      });
+
+      let switched = false;
+      esriStreets.on("tileerror", () => {
+        if (!switched) {
+          switched = true;
+          map.removeLayer(esriStreets);
+          esriTopo.addTo(map);
+        }
+      });
+
+      esriStreets.addTo(map);
+    }
+
+    function initMapsIfNeeded() {
+      if (typeof L === "undefined") return;
+
+      if (!bookingPreviewMap && document.getElementById("booking-preview-map")) {
+        bookingPreviewMap = L.map("booking-preview-map", { zoomControl: true }).setView([riderActualPos.lat, riderActualPos.lng], 13);
+        addOsmTileLayer(bookingPreviewMap);
+      }
+
+      if (!riderLiveMap && document.getElementById("rider-live-map")) {
+        riderLiveMap = L.map("rider-live-map", { zoomControl: true }).setView([riderActualPos.lat, riderActualPos.lng], 13);
+        addOsmTileLayer(riderLiveMap);
+      }
+
+      if (!passengerLiveMap && document.getElementById("passenger-live-map")) {
+        passengerLiveMap = L.map("passenger-live-map", { zoomControl: true }).setView([riderActualPos.lat, riderActualPos.lng], 13);
+        addOsmTileLayer(passengerLiveMap);
+      }
+    }
+
+    async function updateBookingPreviewMap() {
+      initMapsIfNeeded();
+      if (!bookingPreviewMap) return;
+
+      const pLoc = LOCATIONS.find((l) => l.id === selectedPickupId) || LOCATIONS[1];
+      const dLoc = LOCATIONS.find((l) => l.id === selectedDropoffId) || LOCATIONS[19];
+      const pCoords = customPickupCoords ? { lat: customPickupCoords.lat, lng: customPickupCoords.lng } : { lat: pLoc.lat, lng: pLoc.lng };
+      const dCoords = { lat: dLoc.lat, lng: dLoc.lng };
+
+      const routeData = await fetchHighwayRoute(pCoords, dCoords);
+      const captionEl = document.getElementById("preview-route-caption");
+      if (captionEl && routeData) {
+        captionEl.textContent = routeData.isHighway ? "Highway Route & Rider GPS" : "Estimated Road Route & Rider GPS";
+      }
+
+      if (bookingPreviewMap._customLayerGroup) {
+        bookingPreviewMap._customLayerGroup.clearLayers();
+      } else {
+        bookingPreviewMap._customLayerGroup = L.layerGroup().addTo(bookingPreviewMap);
+      }
+      const group = bookingPreviewMap._customLayerGroup;
+
+      L.marker([pCoords.lat, pCoords.lng], { icon: createPickupPinIcon() }).bindPopup(`Pickup: ${escapeHTML(pLoc.name)}`).addTo(group);
+      L.marker([dCoords.lat, dCoords.lng], { icon: createDropoffPinIcon() }).bindPopup(`Drop-off: ${escapeHTML(dLoc.name)}`).addTo(group);
+
+      if (routeData && routeData.latLngs.length > 0) {
+        L.polyline(routeData.latLngs, {
+          color: "#059669",
+          weight: 4.5,
+          opacity: 0.92
+        }).addTo(group);
+      }
+
+      // Moto marker stays where riderActualPos is (does NOT wiggle on its own)
+      L.marker([riderActualPos.lat, riderActualPos.lng], { icon: createMotoDivIcon("Rider Position") })
+        .bindPopup(hasRealRiderMoved ? "Rider Live GPS Position" : "Rider Stationary (Waiting for movement)")
+        .addTo(group);
+
+      const bounds = L.latLngBounds([[pCoords.lat, pCoords.lng], [dCoords.lat, dCoords.lng], [riderActualPos.lat, riderActualPos.lng]]);
+      bookingPreviewMap.fitBounds(bounds, { padding: [24, 24], maxZoom: 15 });
+    }
+
+    async function updateRiderLiveMap() {
+      initMapsIfNeeded();
+      if (!riderLiveMap) return;
+      riderLiveMap.invalidateSize();
+
+      if (riderLiveMap._customLayerGroup) {
+        riderLiveMap._customLayerGroup.clearLayers();
+      } else {
+        riderLiveMap._customLayerGroup = L.layerGroup().addTo(riderLiveMap);
+      }
+      const group = riderLiveMap._customLayerGroup;
+
+      const riderLabel = riderProfile.name ? `${riderProfile.name} (${riderProfile.plate || "Moto"})` : "Rider";
+      L.marker([riderActualPos.lat, riderActualPos.lng], { icon: createMotoDivIcon(riderLabel) })
+        .bindPopup(`<strong>${escapeHTML(riderLabel)}</strong><br/>${riderActualPos.lat.toFixed(5)}, ${riderActualPos.lng.toFixed(5)}`)
+        .addTo(group);
+
+      const activeRide = allBookings.find((b) => b.status === "accepted" && b.riderId === riderProfile.riderId);
+      const statusEl = document.getElementById("rider-map-status");
+
+      if (activeRide && activeRide.pickupCoords) {
+        statusEl.textContent = hasRealRiderMoved ? `Moving to ${activeRide.passengerName}` : `Stationary • Pickup: ${activeRide.passengerName}`;
+        L.marker([activeRide.pickupCoords.lat, activeRide.pickupCoords.lng], { icon: createPickupPinIcon() })
+          .bindPopup(`Pickup: ${escapeHTML(activeRide.pickupName)}`)
+          .addTo(group);
+
+        const toPickupRoute = await fetchHighwayRoute(riderActualPos, activeRide.pickupCoords);
+        if (toPickupRoute && toPickupRoute.latLngs.length > 0) {
+          L.polyline(toPickupRoute.latLngs, { color: "#059669", weight: 4 }).addTo(group);
+        }
+
+        riderLiveMap.fitBounds(
+          L.latLngBounds([[riderActualPos.lat, riderActualPos.lng], [activeRide.pickupCoords.lat, activeRide.pickupCoords.lng]]),
+          { padding: [26, 26], maxZoom: 15 }
+        );
+      } else {
+        statusEl.textContent = hasRealRiderMoved
+          ? `GPS Moved: ${riderActualPos.lat.toFixed(4)}, ${riderActualPos.lng.toFixed(4)}`
+          : `Stationary: ${riderActualPos.lat.toFixed(4)}, ${riderActualPos.lng.toFixed(4)}`;
+        riderLiveMap.setView([riderActualPos.lat, riderActualPos.lng], 14);
+      }
+    }
+
+    async function updatePassengerTrackerMap(booking) {
+      initMapsIfNeeded();
+      if (!passengerLiveMap || !booking) return;
+      passengerLiveMap.invalidateSize();
+
+      if (passengerLiveMap._customLayerGroup) {
+        passengerLiveMap._customLayerGroup.clearLayers();
+      } else {
+        passengerLiveMap._customLayerGroup = L.layerGroup().addTo(passengerLiveMap);
+      }
+      const group = passengerLiveMap._customLayerGroup;
+
+      const pCoords = booking.pickupCoords || { lat: 8.5668, lng: 124.4765 };
+      const dCoords = booking.dropoffCoords || { lat: 8.6115, lng: 124.4565 };
+      const riderCoords = booking.riderCoords || riderActualPos;
+
+      L.marker([pCoords.lat, pCoords.lng], { icon: createPickupPinIcon() })
+        .bindPopup(`Pickup: ${escapeHTML(booking.pickupName)}`)
+        .addTo(group);
+      L.marker([dCoords.lat, dCoords.lng], { icon: createDropoffPinIcon() })
+        .bindPopup(`Drop-off: ${escapeHTML(booking.dropoffName)}`)
+        .addTo(group);
+
+      const tripRoute = await fetchHighwayRoute(pCoords, dCoords);
+      if (tripRoute && tripRoute.latLngs.length > 0) {
+        L.polyline(tripRoute.latLngs, {
+          color: "#059669",
+          weight: 4.5,
+          opacity: 0.92
+        }).addTo(group);
+      }
+
+      if (booking.status === "accepted" && booking.riderCoords) {
+        const riderToPickup = await fetchHighwayRoute(booking.riderCoords, pCoords);
+        if (riderToPickup && riderToPickup.latLngs.length > 0) {
+          L.polyline(riderToPickup.latLngs, {
+            color: "#0284c7",
+            weight: 3.5,
+            dashArray: "6, 6"
+          }).addTo(group);
+        }
+      }
+
+      L.marker([riderCoords.lat, riderCoords.lng], {
+        icon: createMotoDivIcon(booking.riderName || "Rider")
+      }).bindPopup(
+        booking.status === "accepted"
+          ? `<strong>${escapeHTML(booking.riderName || "Rider")}</strong><br/>${escapeHTML(booking.riderMotor || "")} • ${escapeHTML(booking.riderPlate || "")}`
+          : "Rider Position"
+      ).addTo(group);
+
+      const etaEl = document.getElementById("passenger-rider-eta");
+      const distToPickup = computeHaversineKm(riderCoords.lat, riderCoords.lng, pCoords.lat, pCoords.lng);
+      const mins = Math.max(1, Math.round((distToPickup * ROAD_FACTOR / 28) * 60));
+      etaEl.textContent = booking.status === "accepted" ? `Rider ~${mins} min away` : "Waiting for Rider";
+
+      passengerLiveMap.fitBounds(
+        L.latLngBounds([[pCoords.lat, pCoords.lng], [dCoords.lat, dCoords.lng], [riderCoords.lat, riderCoords.lng]]),
+        { padding: [24, 24], maxZoom: 15 }
+      );
+    }
+
+    // Real Rider GPS watcher: moves motorcycle icon ONLY when rider actually moves
+    function startRiderActualGpsWatcher() {
+      if (!("geolocation" in navigator) || riderGpsWatchId !== null) return;
+      riderGpsWatchId = navigator.geolocation.watchPosition(
+        async (pos) => {
+          const nextLat = pos.coords.latitude;
+          const nextLng = pos.coords.longitude;
+          const movedMeters = computeHaversineKm(riderActualPos.lat, riderActualPos.lng, nextLat, nextLng) * 1000;
+
+          if (movedMeters >= 4) {
+            hasRealRiderMoved = true;
+            riderActualPos = { lat: nextLat, lng: nextLng };
+
+            const activeRide = allBookings.find((b) => b.status === "accepted" && b.riderId === riderProfile.riderId);
+            if (activeRide) {
+              if (isFirebaseLive && currentUser) {
+                try {
+                  const docRef = doc(db, "artifacts", appId, "public", "data", "habal_bookings", activeRide.id);
+                  await updateDoc(docRef, { riderCoords: { ...riderActualPos } });
+                } catch (e) {}
+              } else {
+                activeRide.riderCoords = { ...riderActualPos };
+                broadcastLocalUpdate();
+              }
+            }
+
+            if (!document.getElementById("view-rider").classList.contains("hidden")) {
+              updateRiderLiveMap();
+            }
+            if (!document.getElementById("view-passenger").classList.contains("hidden")) {
+              const activeP = allBookings.find((b) => b.id === passengerActiveBookingId);
+              if (activeP) updatePassengerTrackerMap(activeP);
+            }
+          }
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 2000 }
+      );
+    }
+
+    function stopRiderActualGpsWatcher() {
+      if (riderGpsWatchId !== null && "geolocation" in navigator) {
+        navigator.geolocation.clearWatch(riderGpsWatchId);
+        riderGpsWatchId = null;
+      }
+    }
+
+    // =========================================================================
+    // STORAGE, BROADCAST & FIREBASE REAL-TIME SYNC
+    // =========================================================================
+    function initBroadcastChannel() {
+      if ("BroadcastChannel" in window) {
+        realtimeChannel = new BroadcastChannel(CHANNEL_NAME);
+        realtimeChannel.onmessage = (event) => {
+          if (!isFirebaseLive && event.data && event.data.type === "BOOKINGS_UPDATED") {
+            allBookings = loadLocalBookings();
+            refreshAllViews();
+          }
+        };
+      }
+    }
+
+    function broadcastLocalUpdate() {
+      saveLocalBookings(allBookings);
+      if (realtimeChannel) {
+        realtimeChannel.postMessage({ type: "BOOKINGS_UPDATED", at: Date.now() });
+      }
+    }
+
+    function loadSavedRiderProfile() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_RIDER);
+        if (raw) return JSON.parse(raw);
+      } catch (e) {}
+      return {
+        riderId: "RIDER-" + Math.random().toString(36).substring(2, 8).toUpperCase(),
+        name: "",
+        plate: "",
+        phone: "",
+        motor: "",
+        isOnline: false
+      };
+    }
+
+    function persistRiderProfile() {
+      try {
+        localStorage.setItem(STORAGE_KEY_RIDER, JSON.stringify(riderProfile));
+      } catch (e) {}
+    }
+
+    function loadLocalBookings() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_BOOKINGS);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e) {}
+      return [];
+    }
+
+    function saveLocalBookings(list) {
+      try {
+        localStorage.setItem(STORAGE_KEY_BOOKINGS, JSON.stringify(list));
+      } catch (e) {}
+    }
+
+    window.addEventListener("storage", (event) => {
+      if (event.key === STORAGE_KEY_BOOKINGS && !isFirebaseLive) {
+        allBookings = loadLocalBookings();
+        refreshAllViews();
+      }
+    });
+
+    function showToast(message, type = "info") {
+      const container = document.getElementById("toast-container");
+      const el = document.createElement("div");
+
+      const styles = {
+        success: "bg-emerald-700 text-white border-emerald-600",
+        error: "bg-red-600 text-white border-red-500",
+        warning: "bg-amber-600 text-white border-amber-500",
+        info: "bg-slate-900 text-white border-slate-700"
+      };
+      const icons = {
+        success: "fa-circle-check",
+        error: "fa-circle-exclamation",
+        warning: "fa-triangle-exclamation",
+        info: "fa-motorcycle"
+      };
+
+      el.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-lg text-xs font-bold transition-all duration-300 ${styles[type] || styles.info}`;
+      el.innerHTML = `<i class="fa-solid ${icons[type] || icons.info} text-sm"></i><span class="flex-1">${escapeHTML(message)}</span>`;
+      container.appendChild(el);
+
+      setTimeout(() => {
+        el.style.opacity = "0";
+        el.style.transform = "translateY(-6px)";
+        setTimeout(() => el.remove(), 250);
+      }, 3200);
+    }
+
+    function askConfirm(title, message) {
+      return new Promise((resolve) => {
+        const modal = document.getElementById("confirm-modal");
+        document.getElementById("confirm-title").textContent = title;
+        document.getElementById("confirm-message").textContent = message;
+        modal.classList.remove("hidden");
+
+        const okBtn = document.getElementById("confirm-ok-btn");
+        const cancelBtn = document.getElementById("confirm-cancel-btn");
+
+        const done = (val) => {
+          modal.classList.add("hidden");
+          okBtn.onclick = null;
+          cancelBtn.onclick = null;
+          resolve(val);
+        };
+        okBtn.onclick = () => done(true);
+        cancelBtn.onclick = () => done(false);
+      });
+    }
+
+    function computeHaversineKm(lat1, lng1, lat2, lng2) {
+      const toRad = (deg) => (deg * Math.PI) / 180;
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+    }
+
+    function findNearestLocation(lat, lng) {
+      let nearest = LOCATIONS[0];
+      let minDist = Infinity;
+      LOCATIONS.forEach((loc) => {
+        const d = computeHaversineKm(lat, lng, loc.lat, loc.lng);
+        if (d < minDist) {
+          minDist = d;
+          nearest = loc;
+        }
+      });
+      return nearest;
+    }
+
+    async function updateSelectedRouteUI() {
+      const pLoc = LOCATIONS.find((l) => l.id === selectedPickupId) || LOCATIONS[1];
+      const dLoc = LOCATIONS.find((l) => l.id === selectedDropoffId) || LOCATIONS[19];
+
+      const pickupBadge = document.getElementById("pickup-set-badge");
+      if (customPickupCoords) {
+        pickupBadge.textContent = "Live GPS";
+        pickupBadge.className = "text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800";
+        document.getElementById("pickup-display-city").textContent = `${pLoc.city} • Live GPS`;
+      } else {
+        pickupBadge.textContent = "Selected";
+        pickupBadge.className = "text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 text-slate-600";
+        document.getElementById("pickup-display-city").textContent = `${pLoc.city} • Selected Place`;
+      }
+      document.getElementById("pickup-display-name").textContent = pLoc.name;
+
+      document.getElementById("dropoff-display-city").textContent = `${dLoc.city} • Selected Destination`;
+      document.getElementById("dropoff-display-name").textContent = dLoc.name;
+
+      const startCoords = customPickupCoords ? { lat: customPickupCoords.lat, lng: customPickupCoords.lng } : { lat: pLoc.lat, lng: pLoc.lng };
+      const endCoords = { lat: dLoc.lat, lng: dLoc.lng };
+
+      let distanceKm = 1.0;
+      if (!customPickupCoords && pLoc.id === dLoc.id) {
+        distanceKm = 1.0;
+      } else {
+        const routeData = await fetchHighwayRoute(startCoords, endCoords);
+        distanceKm = routeData ? routeData.distanceKm : Math.max(1.0, Number((computeHaversineKm(startCoords.lat, startCoords.lng, endCoords.lat, endCoords.lng) * ROAD_FACTOR).toFixed(1)));
+      }
+
+      const fare = applyFareFromDistance(distanceKm);
+      await updateBookingPreviewMap();
+
+      return {
+        pickupLoc: pLoc,
+        dropoffLoc: dLoc,
+        distance: distanceKm,
+        fare
+      };
+    }
+
+    window.openLocationModal = function (target) {
+      modalTargetField = target;
+      modalCityFilter = "ALL";
+      document.getElementById("location-search-input").value = "";
+
+      const badge = document.getElementById("location-modal-badge");
+      const title = document.getElementById("location-modal-title");
+      if (target === "pickup") {
+        badge.textContent = "PICKUP LOCATION";
+        badge.className = "text-[11px] font-bold uppercase tracking-wider text-emerald-600";
+        title.textContent = "Where should we pick you up?";
+      } else {
+        badge.textContent = "DROP-OFF LOCATION";
+        badge.className = "text-[11px] font-bold uppercase tracking-wider text-amber-600";
+        title.textContent = "Where are you going?";
+      }
+
+      updateCityPillStyles();
+      renderLocationModalList();
+      document.getElementById("location-modal").classList.remove("hidden");
+      setTimeout(() => document.getElementById("location-search-input").focus(), 100);
+    };
+
+    window.closeLocationModal = function () {
+      document.getElementById("location-modal").classList.add("hidden");
+    };
+
+    window.setModalCityFilter = function (city) {
+      modalCityFilter = city;
+      updateCityPillStyles();
+      renderLocationModalList();
+    };
+
+    function updateCityPillStyles() {
+      document.querySelectorAll(".city-filter-pill").forEach((btn) => {
+        const isSelected = btn.getAttribute("data-city") === modalCityFilter;
+        btn.className = isSelected
+          ? "city-filter-pill px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-600 text-white shrink-0 transition"
+          : "city-filter-pill px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 shrink-0 transition";
+      });
+    }
+
+    window.renderLocationModalList = function () {
+      const query = document.getElementById("location-search-input").value.trim().toLowerCase();
+      const listEl = document.getElementById("location-modal-list");
+
+      const filtered = LOCATIONS.filter((loc) => {
+        const matchesCity = modalCityFilter === "ALL" || loc.city === modalCityFilter;
+        const matchesQuery =
+          !query ||
+          loc.name.toLowerCase().includes(query) ||
+          loc.city.toLowerCase().includes(query);
+        return matchesCity && matchesQuery;
+      });
+
+      if (filtered.length === 0) {
+        listEl.innerHTML = `
+          <div class="p-8 text-center text-xs text-slate-500">
+            No locations found for "${escapeHTML(query)}". Try another keyword.
+          </div>
+        `;
+        return;
+      }
+
+      const activeId = modalTargetField === "pickup" ? selectedPickupId : selectedDropoffId;
+      listEl.innerHTML = filtered
+        .map((loc) => {
+          const isCurrent = loc.id === activeId;
+          const cityColorClass =
+            loc.city === "Alubijid"
+              ? "text-emerald-600"
+              : loc.city === "Laguindingan"
+              ? "text-sky-600"
+              : loc.city === "Opol"
+              ? "text-violet-600"
+              : "text-amber-600";
+          return `
+            <button type="button" onclick="playTapSound(); selectLocationFromModal('${loc.id}')"
+              class="w-full px-3.5 py-3 text-left rounded-xl flex items-center justify-between gap-3 transition ${
+                isCurrent ? "bg-emerald-50 text-emerald-900" : "hover:bg-slate-50 text-slate-800"
+              }">
+              <div class="min-w-0">
+                <span class="text-[10px] font-bold uppercase tracking-wider ${cityColorClass} block">${escapeHTML(loc.city)}</span>
+                <span class="text-sm font-bold block truncate">${escapeHTML(loc.name)}</span>
+              </div>
+              ${
+                isCurrent
+                  ? `<i class="fa-solid fa-circle-check text-emerald-600 text-base shrink-0"></i>`
+                  : `<i class="fa-solid fa-chevron-right text-slate-300 text-xs shrink-0"></i>`
+              }
+            </button>
+          `;
+        })
+        .join("");
+    };
+
+    window.selectLocationFromModal = function (locId) {
+      if (modalTargetField === "pickup") {
+        selectedPickupId = locId;
+        clearCustomGPS();
+      } else {
+        selectedDropoffId = locId;
+      }
+      updateSelectedRouteUI();
+      closeLocationModal();
+    };
+
+    window.swapPickupAndDropoff = function () {
+      const temp = selectedPickupId;
+      selectedPickupId = selectedDropoffId;
+      selectedDropoffId = temp;
+      clearCustomGPS();
+      updateSelectedRouteUI();
+    };
+
+    function stopLiveGpsWatcher() {
+      if (liveGpsWatchId !== null && "geolocation" in navigator) {
+        navigator.geolocation.clearWatch(liveGpsWatchId);
+        liveGpsWatchId = null;
+      }
+    }
+
+    async function pushLivePickupCoordinates(lat, lng, nearestName) {
+      if (!passengerActiveBookingId) return;
+      const now = Date.now();
+      if (now - lastLiveGpsPushMs < 3500) return;
+      lastLiveGpsPushMs = now;
+
+      const updatedPickupName = `${nearestName} (Live GPS)`;
+      if (isFirebaseLive && currentUser) {
+        try {
+          const docRef = doc(db, "artifacts", appId, "public", "data", "habal_bookings", passengerActiveBookingId);
+          await updateDoc(docRef, {
+            pickupCoords: { lat, lng },
+            pickupName: updatedPickupName,
+            pickupMethod: "Live GPS"
+          });
+        } catch (e) {}
+      } else {
+        const target = allBookings.find((b) => b.id === passengerActiveBookingId);
+        if (target) {
+          target.pickupCoords = { lat, lng };
+          target.pickupName = updatedPickupName;
+          target.pickupMethod = "Live GPS";
+          broadcastLocalUpdate();
+          refreshAllViews();
+        }
+      }
+    }
+
+    window.toggleLiveGPS = function () {
+      if (!("geolocation" in navigator)) {
+        showToast("GPS is not supported on your browser.", "error");
+        return;
+      }
+
+      if (liveGpsWatchId !== null) {
+        stopLiveGpsWatcher();
+        document.getElementById("btn-gps-label").textContent = "Live GPS";
+        showToast("Live GPS paused.", "info");
+        return;
+      }
+
+      const btn = document.getElementById("btn-use-gps");
+      btn.disabled = true;
+      document.getElementById("btn-gps-label").textContent = "Tracking...";
+
+      liveGpsWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          btn.disabled = false;
+          document.getElementById("btn-gps-label").textContent = "GPS Live";
+
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          customPickupCoords = { lat, lng };
+
+          const nearest = findNearestLocation(lat, lng);
+          selectedPickupId = nearest.id;
+
+          const gpsBadge = document.getElementById("gps-status-badge");
+          gpsBadge.classList.remove("hidden");
+          document.getElementById("gps-coords-text").innerHTML =
+            `<i class="fa-solid fa-satellite-dish mr-1 text-emerald-600 animate-pulse"></i> Live GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)} (${nearest.name})`;
+
+          updateSelectedRouteUI();
+          pushLivePickupCoordinates(lat, lng, nearest.name);
+        },
+        (err) => {
+          btn.disabled = false;
+          stopLiveGpsWatcher();
+          document.getElementById("btn-gps-label").textContent = "Live GPS";
+          let msg = "Unable to access GPS. Please allow Location permission or choose a location.";
+          if (err.code === 1) {
+            msg = "Location permission denied. Turn on Location in your device settings and try again.";
+          }
+          showToast(msg, "warning");
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 1000 }
+      );
+    };
+
+    window.clearCustomGPS = function () {
+      stopLiveGpsWatcher();
+      customPickupCoords = null;
+      document.getElementById("btn-gps-label").textContent = "Live GPS";
+      document.getElementById("gps-status-badge").classList.add("hidden");
+      updateSelectedRouteUI();
+    };
+
+    window.switchRoleTab = function (role) {
+      const pView = document.getElementById("view-passenger");
+      const rView = document.getElementById("view-rider");
+      const pBtn = document.getElementById("btn-tab-passenger");
+      const rBtn = document.getElementById("btn-tab-rider");
+
+      if (role === "passenger") {
+        pView.classList.remove("hidden");
+        rView.classList.add("hidden");
+        pBtn.className =
+          "min-h-[42px] px-3 rounded-lg text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all bg-white text-emerald-700 shadow-xs";
+        rBtn.className =
+          "min-h-[42px] px-3 rounded-lg text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all text-slate-500 hover:text-slate-800";
+        renderPassengerView();
+      } else {
+        pView.classList.add("hidden");
+        rView.classList.remove("hidden");
+        rBtn.className =
+          "min-h-[42px] px-3 rounded-lg text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all bg-white text-emerald-700 shadow-xs";
+        pBtn.className =
+          "min-h-[42px] px-3 rounded-lg text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all text-slate-500 hover:text-slate-800";
+        renderRiderView();
+      }
+    };
+
+    function detectNewPendingBookings(list) {
+      const currentPending = list.filter((b) => b.status === "pending");
+      let hasBrandNew = false;
+
+      currentPending.forEach((b) => {
+        if (!knownPendingIds.has(b.id)) {
+          if (initialSnapshotLoaded) {
+            hasBrandNew = true;
+          }
+          knownPendingIds.add(b.id);
+        }
+      });
+
+      initialSnapshotLoaded = true;
+
+      if (hasBrandNew && riderProfile.isOnline) {
+        playLoudBookingAlert();
+        showToast("NEW BOOKING ALERT! Tap Accept Booking now!", "warning");
+      }
+    }
+
+    async function initStorageEngine() {
+      const dot = document.getElementById("sync-dot");
+      const label = document.getElementById("sync-label");
+
+      try {
+        if (typeof __firebase_config === "undefined" || !__firebase_config) {
+          throw new Error("Local mode");
+        }
+        const config = JSON.parse(__firebase_config);
+        if (!config || !config.apiKey) throw new Error("Missing API key");
+
+        const app = initializeApp(config);
+        auth = getAuth(app);
+        db = getFirestore(app);
+
+        if (typeof __initial_auth_token !== "undefined" && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+
+        currentUser = auth.currentUser;
+        if (!currentUser) throw new Error("No auth user");
+
+        isFirebaseLive = true;
+        dot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+        label.textContent = "Live Cloud";
+
+        const bookingsCol = collection(db, "artifacts", appId, "public", "data", "habal_bookings");
+        onSnapshot(
+          bookingsCol,
+          (snap) => {
+            const items = [];
+            snap.forEach((docSnap) => items.push({ id: docSnap.id, ...docSnap.data() }));
+            items.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+            allBookings = items;
+            detectNewPendingBookings(allBookings);
+            refreshAllViews();
+          },
+          () => fallbackToLocalSync()
+        );
+      } catch (e) {
+        fallbackToLocalSync();
+      }
+    }
+
+    function fallbackToLocalSync() {
+      isFirebaseLive = false;
+      const dot = document.getElementById("sync-dot");
+      const label = document.getElementById("sync-label");
+      dot.className = "w-2 h-2 rounded-full bg-emerald-500 animate-pulse";
+      label.textContent = "Real-Time";
+
+      allBookings = loadLocalBookings();
+      if (allBookings.length === 0) {
+        allBookings = [
+          {
+            id: "BK-" + Math.floor(1000 + Math.random() * 9000),
+            passengerName: "Rose Villanueva",
+            passengerPhone: "0917 555 0192",
+            pickupName: "Alubijid Public Market / Terminal",
+            pickupMethod: "Selected Location",
+            pickupNote: "Across from Mercury Drug",
+            pickupCoords: { lat: 8.5668, lng: 124.4765 },
+            dropoffName: "Laguindingan Airport (Passenger Terminal / Gate)",
+            dropoffMethod: "Selected Destination",
+            dropoffNote: "Departure Gate 1",
+            dropoffCoords: { lat: 8.6115, lng: 124.4565 },
+            distance: 6.9,
+            fare: 90,
+            status: "pending",
+            riderId: null,
+            riderName: null,
+            riderMotor: null,
+            riderPlate: null,
+            riderPhone: null,
+            riderCoords: { lat: 8.5675, lng: 124.4750 },
+            createdAtMs: Date.now() - 40000
+          }
+        ];
+        saveLocalBookings(allBookings);
+      }
+      detectNewPendingBookings(allBookings);
+      refreshAllViews();
+    }
+
+    window.createSampleTestBooking = async function () {
+      const samples = [
+        {
+          name: "Carlo Mendoza",
+          phone: "0926 882 1104",
+          pId: "els_gaisano",
+          pMethod: "Selected Location",
+          pNote: "Main entrance at Gaisano",
+          dId: "els_divine_mercy",
+          dNote: "Main Gate Divine Mercy"
+        },
+        {
+          name: "Joy Ramirez",
+          phone: "0935 419 7732",
+          pId: "lag_airport",
+          pMethod: "GPS Pin",
+          pNote: "Arrival area, carrying a blue bag",
+          dId: "els_sinaloc",
+          dNote: "Zone 4 Sinaloc Highway"
+        },
+        {
+          name: "Mark Reyes",
+          phone: "0955 901 3341",
+          pId: "opol_market",
+          pMethod: "Selected Location",
+          pNote: "Near Opol Public Market tricycle/habal lane",
+          dId: "opol_seven_seas",
+          dNote: "Seven Seas Main Gate, Barra"
+        }
+      ];
+      const pick = samples[Math.floor(Math.random() * samples.length)];
+      const pLoc = LOCATIONS.find((l) => l.id === pick.pId);
+      const dLoc = LOCATIONS.find((l) => l.id === pick.dId);
+      const routeData = await fetchHighwayRoute({ lat: pLoc.lat, lng: pLoc.lng }, { lat: dLoc.lat, lng: dLoc.lng });
+      const dist = routeData ? routeData.distanceKm : Math.max(1.0, Number((computeHaversineKm(pLoc.lat, pLoc.lng, dLoc.lat, dLoc.lng) * ROAD_FACTOR).toFixed(1)));
+      const fare = Math.max(BASE_FARE, Math.ceil((BASE_FARE + dist * RATE_PER_KM) / 5) * 5);
+
+      const bookingData = {
+        passengerName: pick.name,
+        passengerPhone: pick.phone,
+        pickupName: pLoc.name,
+        pickupMethod: pick.pMethod,
+        pickupNote: pick.pNote,
+        pickupCoords: { lat: pLoc.lat, lng: pLoc.lng },
+        dropoffName: dLoc.name,
+        dropoffMethod: "Selected Destination",
+        dropoffNote: pick.dNote,
+        dropoffCoords: { lat: dLoc.lat, lng: dLoc.lng },
+        distance: dist,
+        fare,
+        status: "pending",
+        riderId: null,
+        riderName: null,
+        riderMotor: null,
+        riderPlate: null,
+        riderPhone: null,
+        riderCoords: { ...riderActualPos },
+        createdAtMs: Date.now()
+      };
+
+      if (isFirebaseLive && currentUser) {
+        const colRef = collection(db, "artifacts", appId, "public", "data", "habal_bookings");
+        await addDoc(colRef, { ...bookingData, createdAt: serverTimestamp() });
+      } else {
+        allBookings.unshift({ id: "BK-" + Math.floor(1000 + Math.random() * 9000), ...bookingData });
+        broadcastLocalUpdate();
+        detectNewPendingBookings(allBookings);
+        refreshAllViews();
+      }
+      playLoudBookingAlert();
+      showToast(`New test booking from ${pick.name}!`, "warning");
+    };
+
+    window.submitPassengerBooking = async function (e) {
+      e.preventDefault();
+      playTapSound();
+
+      const name = document.getElementById("input-passenger-name").value.trim();
+      const phone = document.getElementById("input-passenger-phone").value.trim();
+      const pNote = document.getElementById("input-pickup-note").value.trim();
+      const dNote = document.getElementById("input-dropoff-note").value.trim();
+
+      if (!name || !phone) {
+        showToast("Please enter your name and mobile number.", "error");
+        return;
+      }
+
+      const route = await updateSelectedRouteUI();
+      const btn = document.getElementById("btn-submit-booking");
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Sending Booking...</span>`;
+
+      const pickupMethod = liveGpsWatchId !== null
+        ? "Live GPS"
+        : customPickupCoords
+        ? "GPS Pin"
+        : "Selected Location";
+
+      const payload = {
+        passengerName: name,
+        passengerPhone: phone,
+        pickupName: customPickupCoords
+          ? `${route.pickupLoc.name} (${pickupMethod})`
+          : route.pickupLoc.name,
+        pickupMethod,
+        pickupNote: pNote,
+        pickupCoords: customPickupCoords || { lat: route.pickupLoc.lat, lng: route.pickupLoc.lng },
+        dropoffName: route.dropoffLoc.name,
+        dropoffMethod: "Selected Destination",
+        dropoffNote: dNote,
+        dropoffCoords: { lat: route.dropoffLoc.lat, lng: route.dropoffLoc.lng },
+        distance: route.distance,
+        fare: route.fare,
+        status: "pending",
+        riderId: null,
+        riderName: null,
+        riderMotor: null,
+        riderPlate: null,
+        riderPhone: null,
+        riderCoords: { ...riderActualPos },
+        createdAtMs: Date.now()
+      };
+
+      try {
+        if (isFirebaseLive && currentUser) {
+          const colRef = collection(db, "artifacts", appId, "public", "data", "habal_bookings");
+          const docRef = await addDoc(colRef, { ...payload, createdAt: serverTimestamp() });
+          passengerActiveBookingId = docRef.id;
+        } else {
+          const newId = "BK-" + Math.floor(10000 + Math.random() * 90000);
+          passengerActiveBookingId = newId;
+          allBookings.unshift({ id: newId, ...payload });
+          broadcastLocalUpdate();
+        }
+
+        knownPendingIds.add(passengerActiveBookingId);
+        localStorage.setItem(STORAGE_KEY_ACTIVE_PASSENGER_ID, passengerActiveBookingId);
+        playLoudBookingAlert();
+        refreshAllViews();
+        showToast("Booking sent with loud alert! Finding a rider...", "success");
+      } catch (err) {
+        showToast("Could not place booking. Please try again.", "error");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-motorcycle"></i><span>Book Habal-Habal Now</span>`;
+      }
+    };
+
+    window.cancelActivePassengerBooking = async function () {
+      if (!passengerActiveBookingId) return;
+      const ok = await askConfirm("Cancel Booking?", "Are you sure you want to cancel this ride?");
+      if (!ok) return;
+
+      try {
+        if (isFirebaseLive && currentUser) {
+          const docRef = doc(db, "artifacts", appId, "public", "data", "habal_bookings", passengerActiveBookingId);
+          await updateDoc(docRef, { status: "cancelled" });
+        } else {
+          const item = allBookings.find((b) => b.id === passengerActiveBookingId);
+          if (item) item.status = "cancelled";
+          broadcastLocalUpdate();
+        }
+        stopLiveGpsWatcher();
+        passengerActiveBookingId = null;
+        localStorage.removeItem(STORAGE_KEY_ACTIVE_PASSENGER_ID);
+        refreshAllViews();
+        showToast("Your booking has been cancelled.", "info");
+      } catch (e) {
+        showToast("Unable to cancel right now.", "error");
+      }
+    };
+
+    function syncRiderProfileUI() {
+      const nameEl = document.getElementById("rider-card-name");
+      const motorEl = document.getElementById("rider-card-motor");
+
+      if (riderProfile.name && riderProfile.plate) {
+        nameEl.textContent = `${riderProfile.name} • ${riderProfile.plate}`;
+        motorEl.textContent = `${riderProfile.motor} (${riderProfile.phone})`;
+      } else {
+        nameEl.textContent = "No Rider Profile Set";
+        motorEl.textContent = "Tap Edit to add your motorcycle and plate number";
+      }
+
+      document.getElementById("rider-input-name").value = riderProfile.name || "";
+      document.getElementById("rider-input-plate").value = riderProfile.plate || "";
+      document.getElementById("rider-input-phone").value = riderProfile.phone || "";
+      document.getElementById("rider-input-motor").value = riderProfile.motor || "";
+
+      const btn = document.getElementById("btn-rider-toggle");
+      const dot = document.getElementById("rider-toggle-dot");
+      const txt = document.getElementById("rider-toggle-text");
+      const desc = document.getElementById("rider-status-desc");
+
+      if (riderProfile.isOnline) {
+        btn.className =
+          "min-h-[46px] px-4 rounded-xl font-extrabold text-xs uppercase tracking-wider flex items-center gap-2 border transition shadow-xs bg-emerald-600 text-white border-emerald-600";
+        dot.className = "w-2.5 h-2.5 rounded-full bg-white animate-ping";
+        txt.textContent = "ONLINE";
+        desc.textContent = "You are ONLINE — Loud alert active for new bookings";
+        startRiderActualGpsWatcher();
+      } else {
+        btn.className =
+          "min-h-[46px] px-4 rounded-xl font-extrabold text-xs uppercase tracking-wider flex items-center gap-2 border transition shadow-xs bg-slate-100 text-slate-600 border-slate-300";
+        dot.className = "w-2.5 h-2.5 rounded-full bg-slate-400";
+        txt.textContent = "OFFLINE";
+        desc.textContent = "Turn ON to start receiving bookings";
+        stopRiderActualGpsWatcher();
+      }
+    }
+
+    window.toggleRiderProfileForm = function () {
+      document.getElementById("rider-profile-form").classList.toggle("hidden");
+    };
+
+    window.saveRiderProfileForm = function (e) {
+      e.preventDefault();
+      const name = document.getElementById("rider-input-name").value.trim();
+      const plate = document.getElementById("rider-input-plate").value.trim().toUpperCase();
+      const phone = document.getElementById("rider-input-phone").value.trim();
+      const motor = document.getElementById("rider-input-motor").value.trim();
+
+      if (!name || !plate || !phone || !motor) {
+        showToast("Please complete all rider profile fields.", "error");
+        return;
+      }
+
+      riderProfile.name = name;
+      riderProfile.plate = plate;
+      riderProfile.phone = phone;
+      riderProfile.motor = motor;
+      persistRiderProfile();
+      syncRiderProfileUI();
+      document.getElementById("rider-profile-form").classList.add("hidden");
+      playAcceptSound();
+      showToast("Rider profile saved!", "success");
+    };
+
+    window.toggleRiderOnlineStatus = function () {
+      if (!riderProfile.isOnline && (!riderProfile.name || !riderProfile.plate)) {
+        document.getElementById("rider-profile-form").classList.remove("hidden");
+        showToast("Set up your Name and Plate Number before going ONLINE.", "warning");
+        return;
+      }
+
+      riderProfile.isOnline = !riderProfile.isOnline;
+      persistRiderProfile();
+      syncRiderProfileUI();
+      renderRiderView();
+
+      if (riderProfile.isOnline) {
+        playAcceptSound();
+      }
+
+      showToast(
+        riderProfile.isOnline ? "You are now ONLINE! Ready to accept rides." : "You are now OFFLINE.",
+        riderProfile.isOnline ? "success" : "info"
+      );
+    };
+
+    window.acceptPassengerBooking = async function (bookingId) {
+      playTapSound();
+
+      if (!riderProfile.isOnline) {
+        showToast("Turn ON your Rider Status first.", "warning");
+        return;
+      }
+
+      const alreadyRiding = allBookings.find(
+        (b) => b.status === "accepted" && b.riderId === riderProfile.riderId
+      );
+      if (alreadyRiding) {
+        showToast("You already have an active passenger. Complete that trip first.", "warning");
+        return;
+      }
+
+      try {
+        if (isFirebaseLive && currentUser) {
+          const bookingRef = doc(db, "artifacts", appId, "public", "data", "habal_bookings", bookingId);
+          await runTransaction(db, async (tx) => {
+            const snap = await tx.get(bookingRef);
+            if (!snap.exists()) throw new Error("Booking no longer exists.");
+            if (snap.data().status !== "pending") {
+              throw new Error("Too late! Another rider already accepted this booking.");
+            }
+            tx.update(bookingRef, {
+              status: "accepted",
+              riderId: riderProfile.riderId,
+              riderName: riderProfile.name,
+              riderMotor: riderProfile.motor,
+              riderPlate: riderProfile.plate,
+              riderPhone: riderProfile.phone,
+              riderCoords: { ...riderActualPos },
+              acceptedAtMs: Date.now()
+            });
+          });
+        } else {
+          const target = allBookings.find((b) => b.id === bookingId);
+          if (!target || target.status !== "pending") {
+            showToast("Too late! Another rider already accepted this booking.", "error");
+            return;
+          }
+          target.status = "accepted";
+          target.riderId = riderProfile.riderId;
+          target.riderName = riderProfile.name;
+          target.riderMotor = riderProfile.motor;
+          target.riderPlate = riderProfile.plate;
+          target.riderPhone = riderProfile.phone;
+          target.riderCoords = { ...riderActualPos };
+          target.acceptedAtMs = Date.now();
+          broadcastLocalUpdate();
+          refreshAllViews();
+        }
+        playAcceptSound();
+        showToast("Booking accepted! Head to the pickup location.", "success");
+      } catch (err) {
+        showToast(err.message || "Unable to accept booking.", "error");
+      }
+    };
+
+    window.completeRiderTrip = async function (bookingId) {
+      playTapSound();
+      const ok = await askConfirm(
+        "Complete Trip?",
+        "Confirm that the passenger has arrived and you have collected the cash fare."
+      );
+      if (!ok) return;
+
+      try {
+        if (isFirebaseLive && currentUser) {
+          const bookingRef = doc(db, "artifacts", appId, "public", "data", "habal_bookings", bookingId);
+          await updateDoc(bookingRef, {
+            status: "completed",
+            completedAtMs: Date.now()
+          });
+        } else {
+          const target = allBookings.find((b) => b.id === bookingId);
+          if (target) {
+            target.status = "completed";
+            target.completedAtMs = Date.now();
+          }
+          broadcastLocalUpdate();
+          refreshAllViews();
+        }
+        playAcceptSound();
+        showToast("Trip completed! 100% of the fare is yours.", "success");
+      } catch (e) {
+        showToast("Error completing the trip.", "error");
+      }
+    };
+
+    window.cancelRiderTrip = async function (bookingId) {
+      playTapSound();
+      const ok = await askConfirm(
+        "Cancel Ride?",
+        "Return this booking to the pending queue so another rider can take it?"
+      );
+      if (!ok) return;
+
+      try {
+        if (isFirebaseLive && currentUser) {
+          const bookingRef = doc(db, "artifacts", appId, "public", "data", "habal_bookings", bookingId);
+          await updateDoc(bookingRef, {
+            status: "pending",
+            riderId: null,
+            riderName: null,
+            riderMotor: null,
+            riderPlate: null,
+            riderPhone: null
+          });
+        } else {
+          const target = allBookings.find((b) => b.id === bookingId);
+          if (target) {
+            target.status = "pending";
+            target.riderId = null;
+            target.riderName = null;
+            target.riderMotor = null;
+            target.riderPlate = null;
+            target.riderPhone = null;
+          }
+          broadcastLocalUpdate();
+          refreshAllViews();
+        }
+        showToast("Ride returned to pending bookings.", "info");
+      } catch (e) {
+        showToast("Unable to cancel right now.", "error");
+      }
+    };
+
+    function refreshAllViews() {
+      renderPassengerView();
+      renderRiderView();
+    }
+
+    function renderPassengerView() {
+      const trackerCard = document.getElementById("passenger-tracker-card");
+      const bookingCard = document.getElementById("passenger-booking-card");
+
+      if (!passengerActiveBookingId) {
+        trackerCard.classList.add("hidden");
+        bookingCard.classList.remove("hidden");
+        updateBookingPreviewMap();
+        return;
+      }
+
+      const booking = allBookings.find((b) => b.id === passengerActiveBookingId);
+      if (!booking || booking.status === "cancelled") {
+        stopLiveGpsWatcher();
+        passengerActiveBookingId = null;
+        localStorage.removeItem(STORAGE_KEY_ACTIVE_PASSENGER_ID);
+        trackerCard.classList.add("hidden");
+        bookingCard.classList.remove("hidden");
+        updateBookingPreviewMap();
+        return;
+      }
+
+      if (booking.status === "completed") {
+        stopLiveGpsWatcher();
+        passengerActiveBookingId = null;
+        localStorage.removeItem(STORAGE_KEY_ACTIVE_PASSENGER_ID);
+        trackerCard.classList.add("hidden");
+        bookingCard.classList.remove("hidden");
+        updateBookingPreviewMap();
+        showToast("You have arrived at your destination! Thank you for riding.", "success");
+        return;
+      }
+
+      trackerCard.classList.remove("hidden");
+      bookingCard.classList.add("hidden");
+
+      document.getElementById("tracker-booking-code").textContent = `Booking #${booking.id.slice(-6).toUpperCase()}`;
+      document.getElementById("tracker-fare").textContent = `₱${booking.fare}`;
+      document.getElementById("tracker-pickup-method").textContent = booking.pickupMethod || "Selected Location";
+      document.getElementById("tracker-dropoff-method").textContent = booking.dropoffMethod || "Selected Destination";
+      document.getElementById("tracker-pickup").textContent = booking.pickupName;
+      document.getElementById("tracker-dropoff").textContent = booking.dropoffName;
+
+      const pNoteEl = document.getElementById("tracker-pickup-note");
+      if (booking.pickupNote) {
+        pNoteEl.textContent = `"${booking.pickupNote}"`;
+        pNoteEl.classList.remove("hidden");
+      } else {
+        pNoteEl.classList.add("hidden");
+      }
+
+      const dNoteEl = document.getElementById("tracker-dropoff-note");
+      if (booking.dropoffNote) {
+        dNoteEl.textContent = `"${booking.dropoffNote}"`;
+        dNoteEl.classList.remove("hidden");
+      } else {
+        dNoteEl.classList.add("hidden");
+      }
+
+      const statusIcon = document.getElementById("tracker-status-icon");
+      const statusTitle = document.getElementById("tracker-status-title");
+      const riderBox = document.getElementById("tracker-rider-box");
+      const helperText = document.getElementById("tracker-helper-text");
+
+      if (booking.status === "accepted") {
+        statusIcon.className = "w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center";
+        statusIcon.innerHTML = `<i class="fa-solid fa-motorcycle"></i>`;
+        statusTitle.className = "text-xs font-extrabold uppercase tracking-wider text-emerald-700";
+        statusTitle.textContent = "Rider Assigned!";
+
+        riderBox.classList.remove("hidden");
+        document.getElementById("tracker-rider-name").textContent = booking.riderName || "Rider";
+        document.getElementById("tracker-rider-vehicle").textContent = `${booking.riderMotor || "Motorcycle"} • ${booking.riderPlate || ""}`;
+        document.getElementById("tracker-call-rider-link").href = `tel:${booking.riderPhone || ""}`;
+        helperText.textContent = "Moto icon updates when rider's GPS moves.";
+      } else {
+        statusIcon.className = "w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center animate-soft-pulse";
+        statusIcon.innerHTML = `<i class="fa-solid fa-magnifying-glass-location"></i>`;
+        statusTitle.className = "text-xs font-extrabold uppercase tracking-wider text-amber-600";
+        statusTitle.textContent = "Finding a Rider...";
+
+        riderBox.classList.add("hidden");
+        helperText.textContent = "Live updates active across connected tabs/devices.";
+      }
+
+      updatePassengerTrackerMap(booking);
+    }
+
+    function getPickupMapsUrl(booking) {
+      if (booking.pickupCoords && typeof booking.pickupCoords.lat === "number") {
+        return `https://www.google.com/maps/search/?api=1&query=${booking.pickupCoords.lat},${booking.pickupCoords.lng}`;
+      }
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(booking.pickupName + ", Misamis Oriental")}`;
+    }
+
+    function getDropoffMapsUrl(booking) {
+      if (booking.dropoffCoords && typeof booking.dropoffCoords.lat === "number") {
+        return `https://www.google.com/maps/search/?api=1&query=${booking.dropoffCoords.lat},${booking.dropoffCoords.lng}`;
+      }
+      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(booking.dropoffName + ", Misamis Oriental")}`;
+    }
+
+    function renderRiderView() {
+      syncRiderProfileUI();
+      updateRiderLiveMap();
+
+      const pendingList = allBookings.filter((b) => b.status === "pending");
+      const headerBadge = document.getElementById("header-pending-badge");
+      const pendingPill = document.getElementById("pending-pill-count");
+
+      pendingPill.textContent = pendingList.length;
+      if (pendingList.length > 0) {
+        headerBadge.textContent = pendingList.length;
+        headerBadge.classList.remove("hidden");
+      } else {
+        headerBadge.classList.add("hidden");
+      }
+
+      const myCompleted = allBookings.filter(
+        (b) => b.status === "completed" && b.riderId === riderProfile.riderId
+      );
+      const totalEarned = myCompleted.reduce((sum, b) => sum + (Number(b.fare) || 0), 0);
+      document.getElementById("stat-trips-count").textContent = myCompleted.length;
+      document.getElementById("stat-earnings-total").textContent = `₱${totalEarned.toLocaleString()}`;
+
+      const myActiveRide = allBookings.find(
+        (b) => b.status === "accepted" && b.riderId === riderProfile.riderId
+      );
+      const activeSection = document.getElementById("rider-current-ride-section");
+      const activeCard = document.getElementById("rider-current-ride-card");
+
+      if (myActiveRide) {
+        activeSection.classList.remove("hidden");
+        const pickupMapsUrl = getPickupMapsUrl(myActiveRide);
+        const dropoffMapsUrl = getDropoffMapsUrl(myActiveRide);
+
+        activeCard.innerHTML = `
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <span class="text-[10px] font-extrabold uppercase text-emerald-700 block">Passenger</span>
+              <h4 class="text-base font-extrabold text-slate-900">${escapeHTML(myActiveRide.passengerName)}</h4>
+              <p class="text-xs font-mono text-slate-600">${escapeHTML(myActiveRide.passengerPhone)}</p>
+            </div>
+            <div class="text-right">
+              <span class="text-[11px] text-slate-400 block">Fare (Cash)</span>
+              <span class="text-2xl font-extrabold text-amber-600">₱${myActiveRide.fare}</span>
+            </div>
+          </div>
+
+          <div class="bg-slate-50 rounded-xl p-3 space-y-2.5 border border-slate-200/70 text-xs">
+            <div class="flex items-start gap-2">
+              <i class="fa-solid fa-circle-dot text-emerald-600 mt-0.5"></i>
+              <div class="flex-1">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="text-[10px] font-bold uppercase text-slate-400">Pick up at:</span>
+                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">${escapeHTML(myActiveRide.pickupMethod || "Selected Location")}</span>
+                </div>
+                <strong class="text-slate-900 text-sm block mt-0.5">${escapeHTML(myActiveRide.pickupName)}</strong>
+                ${myActiveRide.pickupNote ? `<p class="text-slate-600 mt-0.5">"${escapeHTML(myActiveRide.pickupNote)}"</p>` : ""}
+              </div>
+            </div>
+            <div class="flex items-start gap-2 pt-2 border-t border-slate-200/70">
+              <i class="fa-solid fa-location-dot text-amber-600 mt-0.5"></i>
+              <div class="flex-1">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="text-[10px] font-bold uppercase text-slate-400">Drop off at:</span>
+                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">${escapeHTML(myActiveRide.dropoffMethod || "Selected Destination")}</span>
+                </div>
+                <strong class="text-slate-900 text-sm block mt-0.5">${escapeHTML(myActiveRide.dropoffName)}</strong>
+                ${myActiveRide.dropoffNote ? `<p class="text-slate-600 mt-0.5">"${escapeHTML(myActiveRide.dropoffNote)}"</p>` : ""}
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <a href="tel:${escapeHTML(myActiveRide.passengerPhone)}" onclick="playTapSound()"
+              class="min-h-[44px] px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-phone text-emerald-600"></i>
+              <span>Call</span>
+            </a>
+            <a href="${pickupMapsUrl}" target="_blank" rel="noopener noreferrer" onclick="playTapSound()"
+              class="min-h-[44px] px-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-xs flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-map-pin"></i>
+              <span>Pickup Map</span>
+            </a>
+            <a href="${dropoffMapsUrl}" target="_blank" rel="noopener noreferrer" onclick="playTapSound()"
+              class="min-h-[44px] px-2.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-flag-checkered"></i>
+              <span>Drop-off Map</span>
+            </a>
+          </div>
+
+          <div class="flex gap-2 pt-1">
+            <button type="button" onclick="cancelRiderTrip('${myActiveRide.id}')"
+              class="min-h-[48px] px-3.5 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 font-bold text-xs transition">
+              Cancel
+            </button>
+            <button type="button" onclick="completeRiderTrip('${myActiveRide.id}')"
+              class="flex-1 min-h-[48px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-sm transition">
+              <i class="fa-solid fa-circle-check"></i>
+              <span>Complete Trip</span>
+            </button>
+          </div>
+        `;
+      } else {
+        activeSection.classList.add("hidden");
+      }
+
+      const offlineBox = document.getElementById("rider-offline-box");
+      const pendingFeed = document.getElementById("rider-pending-feed");
+
+      if (!riderProfile.isOnline) {
+        offlineBox.classList.remove("hidden");
+        pendingFeed.classList.add("hidden");
+        return;
+      }
+
+      offlineBox.classList.add("hidden");
+      pendingFeed.classList.remove("hidden");
+
+      if (pendingList.length === 0) {
+        pendingFeed.innerHTML = `
+          <div class="bg-white rounded-2xl border border-slate-200 p-6 text-center space-y-1.5">
+            <div class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+              <i class="fa-solid fa-motorcycle"></i>
+            </div>
+            <p class="text-sm font-bold text-slate-800">No incoming bookings right now</p>
+            <p class="text-xs text-slate-500">New ride requests will appear here automatically.</p>
+          </div>
+        `;
+        return;
+      }
+
+      pendingFeed.innerHTML = pendingList
+        .map(
+          (b) => `
+          <div class="bg-white rounded-2xl border border-slate-200/90 hover:border-emerald-400 p-4 shadow-xs space-y-3 transition">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <h4 class="text-sm font-extrabold text-slate-900">${escapeHTML(b.passengerName)}</h4>
+                <span class="text-[11px] text-slate-500">${formatTimeAgo(b.createdAtMs)} • ~${b.distance} km</span>
+              </div>
+              <div class="text-right">
+                <span class="text-xl font-extrabold text-amber-600">₱${b.fare}</span>
+                <span class="block text-[10px] font-bold text-emerald-700">100% Yours</span>
+              </div>
+            </div>
+
+            <div class="bg-slate-50 rounded-xl p-3 space-y-2 border border-slate-200/70 text-xs">
+              <div class="flex items-start gap-2">
+                <i class="fa-solid fa-circle-dot text-emerald-600 mt-0.5"></i>
+                <div class="flex-1">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="text-[10px] font-bold uppercase text-slate-400">Pickup</span>
+                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">${escapeHTML(b.pickupMethod || "Selected Location")}</span>
+                  </div>
+                  <span class="font-bold text-slate-900 block mt-0.5">${escapeHTML(b.pickupName)}</span>
+                  ${b.pickupNote ? `<p class="text-slate-600 mt-0.5">"${escapeHTML(b.pickupNote)}"</p>` : ""}
+                </div>
+              </div>
+              <div class="flex items-start gap-2 pt-1.5 border-t border-slate-200/70">
+                <i class="fa-solid fa-location-dot text-amber-600 mt-0.5"></i>
+                <div class="flex-1">
+                  <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="text-[10px] font-bold uppercase text-slate-400">Drop-off</span>
+                    <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">${escapeHTML(b.dropoffMethod || "Selected Destination")}</span>
+                  </div>
+                  <span class="font-bold text-slate-900 block mt-0.5">${escapeHTML(b.dropoffName)}</span>
+                  ${b.dropoffNote ? `<p class="text-slate-600 mt-0.5">"${escapeHTML(b.dropoffNote)}"</p>` : ""}
+                </div>
+              </div>
+            </div>
+
+            <button type="button" onclick="acceptPassengerBooking('${b.id}')"
+              class="w-full min-h-[48px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-xs transition">
+              <i class="fa-solid fa-check"></i>
+              <span>Accept Booking (₱${b.fare})</span>
+            </button>
+          </div>
+        `
+        )
+        .join("");
+    }
+
+    function escapeHTML(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function formatTimeAgo(ms) {
+      if (!ms) return "Just now";
+      const sec = Math.max(1, Math.floor((Date.now() - ms) / 1000));
+      if (sec < 60) return "Just now";
+      const min = Math.floor(sec / 60);
+      if (min < 60) return `${min}m ago`;
+      return `${Math.floor(min / 60)}h ago`;
+    }
+
+    initBroadcastChannel();
+    updateSelectedRouteUI();
+    syncRiderProfileUI();
+    initStorageEngine();
+  </script>
+</body>
+</html>
