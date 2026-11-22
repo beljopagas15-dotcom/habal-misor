@@ -1,7 +1,9 @@
 {
-  "name": "Habal-Habal MisOr",
-  "short_name": "Habal MisOr",
-  "start_url": "./",
+  "id": "/habal-misor/rider.html",
+  "name": "Habal-Habal MisOr Rider",
+  "short_name": "Habal Rider",
+  "description": "Habal-Habal Rider Console for ride bookings and sugo across Alubijid, Laguindingan, El Salvador City, and Opol.",
+  "start_url": "./rider.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#f1f5f9",
@@ -9,9 +11,15 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='40' fill='%23059669'/%3E%3Ctext x='96' y='124' font-size='88' text-anchor='middle' fill='white' font-family='Arial,sans-serif' font-weight='bold'%3EH%3C/text%3E%3C/svg%3E",
+      "src": "./icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any"
     }
   ]
