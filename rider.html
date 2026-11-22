@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Habal-Habal | Rider Console</title>
+  <link rel="manifest" href="./rider-manifest.json" />
+  <meta name="theme-color" content="#059669" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f1f5f9;
+      color: #0f172a;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .moto-map-marker {
+      width: 38px;
+      height: 38px;
+      border-radius: 9999px;
+      background: #059669;
+      color: #ffffff;
+      border: 3px solid #ffffff;
+      box-shadow: 0 8px 18px rgba(5, 150, 105, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .pin-pickup-marker {
+      width: 28px;
+      height: 28px;
+      border-radius: 9999px;
+      background: #10b981;
+      color: #ffffff;
+      border: 3px solid #ffffff;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .pin-dropoff-marker {
+      width: 28px;
+      height: 28px;
+      border-radius: 9999px;
+      background: #f59e0b;
+      color: #ffffff;
+      border: 3px solid #ffffff;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-900 flex flex-col items-center">
+
+  <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-[440px] pointer-events-none flex flex-col gap-2"></div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirm-modal" class="fixed inset-0 z-50 hidden bg-slate-900/50 flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-sm p-5 shadow-2xl">
+      <div class="flex items-center gap-3 mb-2">
+        <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+          <i class="fa-solid fa-circle-question text-lg"></i>
+        </div>
+        <h3 id="confirm-title" class="text-base font-bold text-slate-900">Confirm Action</h3>
+      </div>
+      <p id="confirm-message" class="text-sm text-slate-600 mb-5 leading-relaxed">Are you sure?</p>
+      <div class="flex gap-2.5">
+        <button id="confirm-cancel-btn" type="button" onclick="playTapSound()" class="flex-1 min-h-[46px] px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition">
+          Back
+        </button>
+        <button id="confirm-ok-btn" type="button" onclick="playTapSound()" class="flex-1 min-h-[46px] px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm transition shadow-sm">
+          Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Rider Container -->
+  <div class="w-full max-w-[480px] min-h-screen bg-slate-50 shadow-xl border-x border-slate-200/80 flex flex-col">
+
+    <header class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 py-3.5">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-600/20 shrink-0">
+            <i class="fa-solid fa-helmet-safety text-lg"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <h1 class="font-extrabold text-base tracking-tight text-slate-900 truncate">Habal-Habal</h1>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-600 text-white shrink-0">RIDER</span>
+            </div>
+            <p id="rider-account-subtitle" class="text-[11px] text-slate-500 truncate">Log in or Create Account required</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button type="button" id="btn-duty-toggle" onclick="toggleRiderDuty()"
+            class="hidden min-h-[34px] px-3 rounded-full bg-emerald-600 text-white text-[11px] font-extrabold flex items-center gap-1.5 shadow-xs transition">
+            <span id="duty-dot" class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+            <span id="duty-label">ONLINE</span>
+          </button>
+
+          <button type="button" id="btn-logout-rider" onclick="playTapSound(); logoutRiderAccount()"
+            class="hidden min-h-[34px] px-2.5 rounded-full bg-slate-100 hover:bg-red-50 border border-slate-200 text-slate-700 hover:text-red-600 text-[11px] font-bold flex items-center gap-1 transition">
+            <i class="fa-solid fa-right-from-bracket"></i>
+            <span>Log Out</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 p-4 space-y-4">
+
+      <!-- REQUIRED LOG IN / CREATE ACCOUNT GATE (RIDER) -->
+      <section id="rider-auth-card" class="bg-white rounded-2xl border-2 border-emerald-500 p-4 sm:p-5 shadow-md space-y-4">
+        <div>
+          <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">Rider Account Required</span>
+          <h2 id="rider-auth-heading" class="text-lg font-extrabold text-slate-900 mt-1">Rider Log In</h2>
+          <p class="text-xs text-slate-500">New accounts require Admin approval before going ONLINE.</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
+          <button type="button" id="rider-tab-login" onclick="playTapSound(); switchRiderAuthMode('login')"
+            class="py-2 rounded-lg text-xs font-extrabold bg-white text-emerald-700 shadow-xs transition">
+            Log In
+          </button>
+          <button type="button" id="rider-tab-register" onclick="playTapSound(); switchRiderAuthMode('register')"
+            class="py-2 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition">
+            Create Account
+          </button>
+        </div>
+
+        <!-- Rider Log In Form -->
+        <form id="rider-login-form" onsubmit="handleRiderLogin(event)" class="space-y-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Mobile Number *</label>
+            <input type="tel" id="rider-login-phone" required placeholder="09XX XXX XXXX"
+              class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Password / PIN *</label>
+            <input type="password" id="rider-login-password" required placeholder="Enter password or PIN"
+              class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+          </div>
+          <button type="submit"
+            class="w-full min-h-[48px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-sm flex items-center justify-center gap-2 transition">
+            <i class="fa-solid fa-right-to-bracket"></i>
+            <span>Log In as Rider</span>
+          </button>
+        </form>
+
+        <!-- Rider Create Account Form -->
+        <form id="rider-register-form" onsubmit="handleRiderRegister(event)" class="hidden space-y-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Rider Full Name *</label>
+            <input type="text" id="rider-reg-name" required placeholder="e.g. Kuya Jun"
+              class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Mobile Number *</label>
+            <input type="tel" id="rider-reg-phone" required placeholder="09XX XXX XXXX"
+              class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+          </div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Motorcycle *</label>
+              <input type="text" id="rider-reg-motor" required placeholder="e.g. Honda TMX"
+                class="w-full min-h-[44px] px-3 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Plate Number *</label>
+              <input type="text" id="rider-reg-plate" required placeholder="e.g. 123 ABC"
+                class="w-full min-h-[44px] px-3 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Create Password / PIN *</label>
+            <input type="password" id="rider-reg-password" required minlength="4" placeholder="At least 4 characters"
+              class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+          </div>
+          <button type="submit"
+            class="w-full min-h-[48px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-sm flex items-center justify-center gap-2 transition">
+            <i class="fa-solid fa-id-card"></i>
+            <span>Create Rider Account</span>
+          </button>
+        </form>
+      </section>
+
+      <!-- PROTECTED RIDER CONSOLE (Shown only when logged in) -->
+      <div id="rider-app-content" class="hidden space-y-4">
+
+        <!-- Pending / Rejected Approval Banner -->
+        <section id="rider-approval-banner" class="hidden rounded-2xl border-2 p-4 shadow-xs space-y-1">
+          <div class="flex items-center justify-between gap-2">
+            <span id="rider-approval-badge" class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded">PENDING APPROVAL</span>
+          </div>
+          <h3 id="rider-approval-title" class="text-sm font-extrabold text-slate-900">Waiting for Admin Approval</h3>
+          <p id="rider-approval-desc" class="text-xs text-slate-600 leading-relaxed">
+            Your rider account is under review by the Admin. Once approved, you can go ONLINE and accept bookings.
+          </p>
+        </section>
+
+        <!-- Earnings Summary Card -->
+        <section class="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <span class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 block">Rider Earnings</span>
+              <h2 id="rider-earnings-total" class="text-2xl font-extrabold text-slate-900">₱0</h2>
+            </div>
+            <button type="button" onclick="playTapSound(); triggerRiderGPS(true)"
+              class="text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1.5 rounded-lg transition">
+              <i class="fa-solid fa-location-crosshairs mr-1"></i>GPS
+            </button>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div class="rounded-xl bg-emerald-50 border border-emerald-200 p-2">
+              <span id="rider-stat-completed" class="text-sm font-extrabold text-emerald-800 block">0</span>
+              <span class="text-[10px] font-bold text-emerald-700">Completed</span>
+            </div>
+            <div class="rounded-xl bg-red-50 border border-red-200 p-2">
+              <span id="rider-stat-cancelled" class="text-sm font-extrabold text-red-700 block">0</span>
+              <span class="text-[10px] font-bold text-red-600">Cancelled</span>
+            </div>
+            <div class="rounded-xl bg-slate-50 border border-slate-200 p-2">
+              <span id="rider-stat-total-rides" class="text-sm font-extrabold text-slate-800 block">0</span>
+              <span class="text-[10px] font-bold text-slate-600">Total Trips</span>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+            <span id="rider-summary-vehicle" class="font-semibold text-slate-700 truncate">Motorcycle • Plate</span>
+            <span id="rider-gps-coords" class="truncate">
+              <i class="fa-solid fa-satellite-dish mr-1 text-emerald-600"></i> Waiting for GPS...
+            </span>
+          </div>
+        </section>
+
+        <!-- Active Accepted Ride / Sugo Card -->
+        <section id="rider-active-card" class="hidden bg-white rounded-2xl border-2 border-emerald-600 p-4 shadow-md space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span id="rider-active-badge" class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                  Active Ride
+                </span>
+                <span id="rider-active-type-badge" class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-600 text-white">
+                  RIDE
+                </span>
+              </div>
+              <h3 id="rider-active-passenger" class="text-base font-extrabold text-slate-900 mt-1">Passenger Name</h3>
+              <p id="rider-active-phone" class="text-xs font-mono text-slate-500">09XX XXX XXXX</p>
+            </div>
+            <a id="rider-call-passenger" href="tel:" onclick="playTapSound()"
+              class="min-h-[42px] px-3.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 font-bold text-xs flex items-center gap-1.5 transition">
+              <i class="fa-solid fa-phone"></i>
+              <span>Call</span>
+            </a>
+          </div>
+
+          <!-- Sugo Message Box (Shown when serviceType === "sugo") -->
+          <div id="rider-active-sugo-box" class="hidden rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 flex items-center gap-1">
+                <i class="fa-solid fa-bag-shopping"></i>
+                <span>Sugo Message</span>
+              </span>
+              <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-600 text-white">SUGO</span>
+            </div>
+            <p id="rider-active-sugo-message" class="text-xs font-bold text-slate-900 whitespace-pre-line leading-relaxed">---</p>
+            <p id="rider-active-sugo-store" class="text-[11px] font-semibold text-emerald-900 hidden"></p>
+          </div>
+
+          <!-- Simple 4-Line Meter Box (BASE FARE, DISTANCE RATE, RUNNING TIME, TOTAL) -->
+          <div class="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 space-y-2">
+            <div class="flex items-center justify-between gap-2 pb-1.5 border-b border-black/5">
+              <span id="rider-meter-status-badge" class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-100 text-amber-800">
+                Standby • Tap Pick Up to Start
+              </span>
+              <span id="rider-meter-live-tag" class="text-[11px] font-bold text-slate-500">Standby</span>
+            </div>
+
+            <div class="space-y-1.5 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-600">BASE FARE</span>
+                <span id="rider-meter-base" class="font-extrabold text-slate-800">₱20</span>
+              </div>
+
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-600">DISTANCE RATE</span>
+                <span id="rider-meter-distance" class="font-extrabold text-slate-800">0.00 km • ₱0</span>
+              </div>
+
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-600">RUNNING TIME</span>
+                <span id="rider-meter-time" class="font-extrabold text-slate-800">00:00 • ₱0</span>
+              </div>
+
+              <div class="flex items-center justify-between pt-1.5 border-t border-emerald-200">
+                <span id="rider-meter-total-label" class="text-xs font-extrabold uppercase tracking-wider text-emerald-800">TOTAL</span>
+                <span id="rider-meter-total" class="text-lg font-extrabold text-emerald-700">₱20</span>
+              </div>
+            </div>
+          </div>
+
+          <div id="rider-live-map" class="w-full h-48 rounded-xl border border-slate-200 overflow-hidden z-10"></div>
+
+          <div class="bg-slate-50 rounded-xl p-3 space-y-2 border border-slate-200/70 text-xs">
+            <div id="rider-active-pickup-row">
+              <span class="text-[10px] font-bold uppercase text-emerald-700 block">Pickup</span>
+              <p id="rider-active-pickup" class="font-bold text-slate-900">---</p>
+              <p id="rider-active-pickup-note" class="text-slate-600 italic hidden"></p>
+            </div>
+            <div id="rider-active-dropoff-row" class="pt-1 border-t border-slate-200/70">
+              <span id="rider-active-dropoff-label" class="text-[10px] font-bold uppercase text-amber-600 block">Drop-off Barangay</span>
+              <p id="rider-active-dropoff" class="font-bold text-slate-900">---</p>
+              <p id="rider-active-dropoff-note" class="text-slate-600 italic hidden"></p>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <button type="button" id="btn-rider-pickup" onclick="playTapSound(); startPickupMeter()"
+              class="w-full min-h-[48px] px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-sm shadow-sm flex items-center justify-center gap-2 transition">
+              <i class="fa-solid fa-play"></i>
+              <span id="btn-rider-pickup-label">Pick Up Passenger (Start Meter)</span>
+            </button>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <button type="button" onclick="playTapSound(); cancelRideAsRider()"
+                class="min-h-[46px] px-3 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 font-bold text-xs flex items-center justify-center gap-1.5 transition">
+                <i class="fa-solid fa-ban"></i>
+                <span>Cancel</span>
+              </button>
+
+              <button type="button" onclick="playTapSound(); completeActiveRide()"
+                class="min-h-[46px] px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-sm flex items-center justify-center gap-1.5 transition">
+                <i class="fa-solid fa-flag-checkered"></i>
+                <span id="btn-rider-complete-label">Complete Trip</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Pending Passenger Bookings List -->
+        <section id="rider-pending-section" class="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-sm font-extrabold text-slate-900">Pending Bookings & Sugo</h2>
+              <p class="text-[11px] text-slate-500">Tap Accept to take a request from index.html.</p>
+            </div>
+            <span id="pending-count-badge" class="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-extrabold">0</span>
+          </div>
+
+          <div id="rider-pending-list" class="space-y-2.5">
+            <div class="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+              No pending bookings right now.
+            </div>
+          </div>
+        </section>
+
+        <!-- Rider Ride History -->
+        <section class="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h2 class="text-sm font-extrabold text-slate-900">My Trip History</h2>
+              <p class="text-[11px] text-slate-500">Completed & cancelled rides/sugo for your account.</p>
+            </div>
+            <div class="flex gap-1">
+              <button type="button" onclick="playTapSound(); setHistoryFilter('ALL')" data-hist-filter="ALL"
+                class="hist-filter-btn px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-600 text-white">
+                All
+              </button>
+              <button type="button" onclick="playTapSound(); setHistoryFilter('completed')" data-hist-filter="completed"
+                class="hist-filter-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 text-slate-600">
+                Done
+              </button>
+              <button type="button" onclick="playTapSound(); setHistoryFilter('cancelled')" data-hist-filter="cancelled"
+                class="hist-filter-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 text-slate-600">
+                Cancel
+              </button>
+            </div>
+          </div>
+
+          <div id="rider-history-list" class="space-y-2">
+            <div class="p-5 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
+              No trip history yet.
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+    </main>
+
+    <footer class="mt-auto border-t border-slate-200 bg-white px-4 py-3 text-center text-[11px] text-slate-500">
+      Habal-Habal Rider • Alubijid • Laguindingan • El Salvador • Opol
+    </footer>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const DEFAULT_FARE_CONFIG = {
+      baseFare: 20,
+      ratePerKm: 10,
+      timeRatePerMin: 1
+    };
+
+    const STORAGE_KEY_ACCOUNTS = "habal_misor_accounts_v1";
+    const STORAGE_KEY_RIDER_SESSION = "habal_misor_rider_session_v1";
+    const STORAGE_KEY_BOOKINGS = "habal_misor_bookings_v6";
+    const STORAGE_KEY_FARE_CONFIG = "habal_misor_fare_config_v1";
+    const CHANNEL_NAME = "habal_misor_realtime_channel_v6";
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'habal-misor-free';
+    let db = null;
+    let auth = null;
+    let currentUser = null;
+    let isFirebaseLive = false;
+    let realtimeChannel = null;
+
+    let fareConfig = loadFareConfig();
+    let currentRiderAccount = null;
+    let allBookings = [];
+    let riderOnline = true;
+    let riderCoords = null;
+    let lastMeterTickMs = 0;
+    let riderMap = null;
+    let lastPendingCount = 0;
+    let historyFilter = "ALL";
+
+    function loadFareConfig() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_FARE_CONFIG);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return {
+            baseFare: Math.max(0, Number(parsed.baseFare ?? DEFAULT_FARE_CONFIG.baseFare)),
+            ratePerKm: Math.max(0, Number(parsed.ratePerKm ?? DEFAULT_FARE_CONFIG.ratePerKm)),
+            timeRatePerMin: Math.max(0, Number(parsed.timeRatePerMin ?? DEFAULT_FARE_CONFIG.timeRatePerMin))
+          };
+        }
+      } catch (e) {}
+      return { ...DEFAULT_FARE_CONFIG };
+    }
+
+    function loadAccounts() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_ACCOUNTS);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveAccounts(list) {
+      try {
+        localStorage.setItem(STORAGE_KEY_ACCOUNTS, JSON.stringify(list));
+      } catch (e) {}
+      if (realtimeChannel) {
+        realtimeChannel.postMessage({ type: "ACCOUNTS_UPDATED", at: Date.now() });
+      }
+    }
+
+    function refreshRiderAccountFromStorage() {
+      if (!currentRiderAccount) return;
+      const accounts = loadAccounts();
+      const latest = accounts.find((a) => a.id === currentRiderAccount.id && a.role === "rider");
+      if (latest) {
+        currentRiderAccount = latest;
+        try {
+          localStorage.setItem(STORAGE_KEY_RIDER_SESSION, JSON.stringify(latest));
+        } catch (e) {}
+      }
+    }
+
+    function isRiderApproved() {
+      refreshRiderAccountFromStorage();
+      return Boolean(currentRiderAccount && currentRiderAccount.approvalStatus === "approved");
+    }
+
+    function normalizePhone(p) {
+      return String(p || "").replace(/\D/g, "");
+    }
+
+    window.setHistoryFilter = function (filter) {
+      historyFilter = filter;
+      document.querySelectorAll(".hist-filter-btn").forEach((btn) => {
+        const active = btn.getAttribute("data-hist-filter") === filter;
+        btn.className = active
+          ? "hist-filter-btn px-2.5 py-1 rounded-lg text-[11px] font-bold bg-emerald-600 text-white"
+          : "hist-filter-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-slate-100 text-slate-600";
+      });
+      renderRiderView();
+    };
+
+    window.switchRiderAuthMode = function (mode) {
+      const loginForm = document.getElementById("rider-login-form");
+      const regForm = document.getElementById("rider-register-form");
+      const loginTab = document.getElementById("rider-tab-login");
+      const regTab = document.getElementById("rider-tab-register");
+      const heading = document.getElementById("rider-auth-heading");
+
+      if (mode === "register") {
+        loginForm.classList.add("hidden");
+        regForm.classList.remove("hidden");
+        loginTab.className = "py-2 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition";
+        regTab.className = "py-2 rounded-lg text-xs font-extrabold bg-white text-emerald-700 shadow-xs transition";
+        heading.textContent = "Create Rider Account";
+      } else {
+        regForm.classList.add("hidden");
+        loginForm.classList.remove("hidden");
+        regTab.className = "py-2 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition";
+        loginTab.className = "py-2 rounded-lg text-xs font-extrabold bg-white text-emerald-700 shadow-xs transition";
+        heading.textContent = "Rider Log In";
+      }
+    };
+
+    window.handleRiderRegister = function (e) {
+      e.preventDefault();
+      playTapSound();
+
+      const name = document.getElementById("rider-reg-name").value.trim();
+      const phoneRaw = document.getElementById("rider-reg-phone").value.trim();
+      const motor = document.getElementById("rider-reg-motor").value.trim();
+      const plate = document.getElementById("rider-reg-plate").value.trim();
+      const password = document.getElementById("rider-reg-password").value;
+      const phoneKey = normalizePhone(phoneRaw);
+
+      if (!name || phoneKey.length < 7 || !motor || !plate || password.length < 4) {
+        showToast("Please fill all required rider fields.", "error");
+        return;
+      }
+
+      const accounts = loadAccounts();
+      const exists = accounts.find((a) => a.role === "rider" && normalizePhone(a.phone) === phoneKey);
+      if (exists) {
+        showToast("Rider mobile already registered. Please Log In.", "warning");
+        switchRiderAuthMode("login");
+        document.getElementById("rider-login-phone").value = phoneRaw;
+        return;
+      }
+
+      const newAcc = {
+        id: "RDR-" + Date.now(),
+        role: "rider",
+        name,
+        phone: phoneRaw,
+        motor,
+        plate,
+        password,
+        approvalStatus: "pending",
+        createdAtMs: Date.now()
+      };
+      accounts.push(newAcc);
+      saveAccounts(accounts);
+      applyRiderSession(newAcc);
+      showToast("Account created! Waiting for Admin approval.", "warning");
+    };
+
+    window.handleRiderLogin = function (e) {
+      e.preventDefault();
+      playTapSound();
+
+      const phoneKey = normalizePhone(document.getElementById("rider-login-phone").value.trim());
+      const password = document.getElementById("rider-login-password").value;
+
+      const accounts = loadAccounts();
+      const match = accounts.find(
+        (a) => a.role === "rider" && normalizePhone(a.phone) === phoneKey && a.password === password
+      );
+
+      if (!match) {
+        showToast("Invalid rider mobile or password.", "error");
+        return;
+      }
+
+      const normalized = { ...match, approvalStatus: match.approvalStatus || "pending" };
+      applyRiderSession(normalized);
+      playNewBookingAlert();
+      showToast(`Logged in as ${normalized.name}!`, "success");
+    };
+
+    window.logoutRiderAccount = function () {
+      currentRiderAccount = null;
+      localStorage.removeItem(STORAGE_KEY_RIDER_SESSION);
+      syncRiderAuthGateUI();
+      showToast("Logged out.", "info");
+    };
+
+    function applyRiderSession(acc) {
+      currentRiderAccount = acc;
+      try {
+        localStorage.setItem(STORAGE_KEY_RIDER_SESSION, JSON.stringify(acc));
+      } catch (e) {}
+      syncRiderAuthGateUI();
+      triggerRiderGPS(false);
+      renderRiderView();
+    }
+
+    function syncRiderApprovalBanner() {
+      const banner = document.getElementById("rider-approval-banner");
+      const badge = document.getElementById("rider-approval-badge");
+      const title = document.getElementById("rider-approval-title");
+      const desc = document.getElementById("rider-approval-desc");
+
+      if (!currentRiderAccount) {
+        banner.classList.add("hidden");
+        return;
+      }
+
+      const status = currentRiderAccount.approvalStatus || "pending";
+      if (status === "approved") {
+        banner.className = "rounded-2xl border border-emerald-200 bg-emerald-50/80 p-3.5 shadow-xs space-y-0.5";
+        banner.classList.remove("hidden");
+        badge.className = "text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-600 text-white";
+        badge.textContent = "APPROVED";
+        title.textContent = "Account Approved by Admin";
+        desc.textContent = "You can go ONLINE and accept bookings.";
+      } else if (status === "rejected") {
+        banner.className = "rounded-2xl border-2 border-red-300 bg-red-50 p-4 shadow-xs space-y-1";
+        banner.classList.remove("hidden");
+        badge.className = "text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-red-600 text-white";
+        badge.textContent = "NOT APPROVED / SUSPENDED";
+        title.textContent = "Account Not Approved Yet";
+        desc.textContent = "Contact the Admin to review or approve your rider account before accepting rides.";
+      } else {
+        banner.className = "rounded-2xl border-2 border-amber-300 bg-amber-50 p-4 shadow-xs space-y-1";
+        banner.classList.remove("hidden");
+        badge.className = "text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500 text-white";
+        badge.textContent = "PENDING ADMIN APPROVAL";
+        title.textContent = "Waiting for Admin Approval";
+        desc.textContent = "Your account is pending approval by the Admin. Once approved, ONLINE duty and ride acceptance will unlock.";
+      }
+    }
+
+    function syncRiderAuthGateUI() {
+      const authCard = document.getElementById("rider-auth-card");
+      const appContent = document.getElementById("rider-app-content");
+      const dutyBtn = document.getElementById("btn-duty-toggle");
+      const logoutBtn = document.getElementById("btn-logout-rider");
+      const subtitle = document.getElementById("rider-account-subtitle");
+      const vehicleSummary = document.getElementById("rider-summary-vehicle");
+
+      if (currentRiderAccount) {
+        refreshRiderAccountFromStorage();
+        authCard.classList.add("hidden");
+        appContent.classList.remove("hidden");
+        dutyBtn.classList.remove("hidden");
+        logoutBtn.classList.remove("hidden");
+        const st = (currentRiderAccount.approvalStatus || "pending").toUpperCase();
+        subtitle.textContent = `${currentRiderAccount.name} • ${st}`;
+        vehicleSummary.textContent = `${currentRiderAccount.motor} • ${currentRiderAccount.plate}`;
+        syncRiderApprovalBanner();
+        updateDutyButtonUI();
+      } else {
+        authCard.classList.remove("hidden");
+        appContent.classList.add("hidden");
+        dutyBtn.classList.add("hidden");
+        logoutBtn.classList.add("hidden");
+        subtitle.textContent = "Log in or Create Account required";
+      }
+    }
+
+    function playTone(freq, durationSec, type = "triangle", gainPeak = 0.75, delaySec = 0) {
+      try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        const ctx = new AudioContextClass();
+        const now = ctx.currentTime + delaySec;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now);
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.exponentialRampToValueAtTime(gainPeak, now + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + durationSec);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + durationSec + 0.02);
+      } catch (e) {}
+    }
+
+    window.playTapSound = function () {
+      playTone(760, 0.075, "triangle", 0.45, 0);
+    };
+
+    function playNewBookingAlert() {
+      playTone(659.25, 0.14, "triangle", 0.85, 0);
+      playTone(880.0, 0.16, "triangle", 0.9, 0.14);
+      playTone(1174.66, 0.24, "sine", 0.95, 0.28);
+    }
+
+    function updateDutyButtonUI() {
+      const btn = document.getElementById("btn-duty-toggle");
+      const dot = document.getElementById("duty-dot");
+      const label = document.getElementById("duty-label");
+
+      if (!isRiderApproved()) {
+        riderOnline = false;
+        btn.className = "min-h-[34px] px-3 rounded-full bg-amber-100 border border-amber-300 text-amber-900 text-[11px] font-extrabold flex items-center gap-1.5 transition";
+        dot.className = "w-2 h-2 rounded-full bg-amber-500";
+        label.textContent = "PENDING";
+        return;
+      }
+
+      if (riderOnline) {
+        btn.className = "min-h-[34px] px-3 rounded-full bg-emerald-600 text-white text-[11px] font-extrabold flex items-center gap-1.5 shadow-xs transition";
+        dot.className = "w-2 h-2 rounded-full bg-white animate-pulse";
+        label.textContent = "ONLINE";
+      } else {
+        btn.className = "min-h-[34px] px-3 rounded-full bg-slate-500 text-white text-[11px] font-extrabold flex items-center gap-1.5 shadow-xs transition";
+        dot.className = "w-2 h-2 rounded-full bg-slate-200";
+        label.textContent = "OFFLINE";
+      }
+    }
+
+    window.toggleRiderDuty = function () {
+      playTapSound();
+      if (!isRiderApproved()) {
+        showToast("Account is not approved by Admin yet.", "warning");
+        return;
+      }
+      riderOnline = !riderOnline;
+      updateDutyButtonUI();
+      showToast(riderOnline ? "You are now ONLINE." : "You are now OFFLINE.", "info");
+    };
+
+    function computeHaversineKm(lat1, lng1, lat2, lng2) {
+      const toRad = (deg) => (deg * Math.PI) / 180;
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+    }
+
+    function computeExactMeter(booking) {
+      const baseFare = Math.max(0, Number(fareConfig.baseFare ?? DEFAULT_FARE_CONFIG.baseFare));
+      const ratePerKm = Math.max(0, Number(fareConfig.ratePerKm ?? DEFAULT_FARE_CONFIG.ratePerKm));
+      const timeRatePerMin = Math.max(0, Number(fareConfig.timeRatePerMin ?? DEFAULT_FARE_CONFIG.timeRatePerMin));
+
+      const mDist = Math.max(0, Number(booking.meterDistanceKm || 0));
+      const elapsedMs = booking.meterStartedAtMs ? Math.max(0, Date.now() - booking.meterStartedAtMs) : 0;
+      const elapsedMins = Math.floor(elapsedMs / 60000);
+      const distanceCharge = Math.round(mDist * ratePerKm);
+      const timeCharge = Math.round(elapsedMins * timeRatePerMin);
+      const total = Math.round(baseFare + distanceCharge + timeCharge);
+      return { baseFare, mDist, elapsedMs, distanceCharge, timeCharge, total };
+    }
+
+    function formatElapsed(ms) {
+      const totalSec = Math.max(0, Math.floor(ms / 1000));
+      const mins = String(Math.floor(totalSec / 60)).padStart(2, "0");
+      const secs = String(totalSec % 60).padStart(2, "0");
+      return `${mins}:${secs}`;
+    }
+
+    function formatTripDate(ms) {
+      if (!ms) return "";
+      try {
+        return new Date(ms).toLocaleString("en-PH", {
+          timeZone: "Asia/Manila",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      } catch (e) {
+        return "";
+      }
+    }
+
+    window.triggerRiderGPS = function (showNotice = false) {
+      if (!currentRiderAccount || !("geolocation" in navigator)) return;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          riderCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          document.getElementById("rider-gps-coords").innerHTML =
+            `<i class="fa-solid fa-satellite-dish mr-1 text-emerald-600"></i> ${riderCoords.lat.toFixed(5)}, ${riderCoords.lng.toFixed(5)}`;
+          updateActiveRiderPosition(riderCoords);
+          if (showNotice) showToast("Rider GPS updated!", "success");
+        },
+        () => {
+          document.getElementById("rider-gps-coords").innerHTML =
+            `<i class="fa-solid fa-triangle-exclamation mr-1 text-amber-500"></i> Enable GPS`;
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    };
+
+    async function updateActiveRiderPosition(newCoords) {
+      const active = getMyActiveBooking();
+      if (!active) return;
+
+      let addedKm = 0;
+      if (active.meterStartedAtMs && active.riderCoords) {
+        const deltaKm = computeHaversineKm(active.riderCoords.lat, active.riderCoords.lng, newCoords.lat, newCoords.lng);
+        if (deltaKm >= 0.01 && deltaKm < 2) addedKm = deltaKm;
+      }
+
+      const nextMeterDist = Number(((active.meterDistanceKm || 0) + addedKm).toFixed(3));
+      const nextMeterCalc = computeExactMeter({ ...active, meterDistanceKm: nextMeterDist });
+
+      await patchBooking(active.id, {
+        riderCoords: newCoords,
+        meterDistanceKm: nextMeterDist,
+        meterTimeCharge: nextMeterCalc.timeCharge,
+        meterFare: nextMeterCalc.total
+      });
+    }
+
+    function getMyActiveBooking() {
+      if (!currentRiderAccount) return null;
+      return allBookings.find((b) => b.status === "accepted" && b.riderId === currentRiderAccount.id) || null;
+    }
+
+    window.acceptPendingBooking = async function (bookingId) {
+      playTapSound();
+      if (!currentRiderAccount) return;
+      if (!isRiderApproved()) {
+        showToast("Wait for Admin approval before accepting rides.", "warning");
+        return;
+      }
+      if (!riderOnline) {
+        showToast("Turn ON your ONLINE status first.", "warning");
+        return;
+      }
+      if (getMyActiveBooking()) {
+        showToast("Finish or cancel your active trip first.", "warning");
+        return;
+      }
+
+      const target = allBookings.find((b) => b.id === bookingId);
+      if (!target || target.status !== "pending") {
+        showToast("Booking is no longer available.", "info");
+        return;
+      }
+
+      await patchBooking(bookingId, {
+        status: "accepted",
+        riderId: currentRiderAccount.id,
+        riderName: currentRiderAccount.name,
+        riderPhone: currentRiderAccount.phone,
+        riderMotor: currentRiderAccount.motor,
+        riderPlate: currentRiderAccount.plate,
+        riderCoords: riderCoords || target.dropoffCoords || target.pickupCoords || null,
+        meterStartedAtMs: null,
+        meterDistanceKm: 0,
+        meterTimeCharge: 0,
+        meterFare: fareConfig.baseFare
+      });
+
+      showToast(`Accepted ${target.passengerName}'s ${target.serviceType === "sugo" ? "sugo" : "booking"}!`, "success");
+    };
+
+    window.startPickupMeter = async function () {
+      const active = getMyActiveBooking();
+      if (!active) return;
+      if (active.meterStartedAtMs) {
+        showToast("Meter is already running!", "info");
+        return;
+      }
+      await patchBooking(active.id, {
+        meterStartedAtMs: Date.now(),
+        meterDistanceKm: 0,
+        meterTimeCharge: 0,
+        meterFare: fareConfig.baseFare
+      });
+      showToast("Pick Up started! Exact meter is now running.", "success");
+    };
+
+    window.cancelRideAsRider = async function () {
+      const active = getMyActiveBooking();
+      if (!active) return;
+      const ok = await askConfirm("Cancel Trip?", `Cancel ${active.serviceType === "sugo" ? "sugo" : "ride"} for ${active.passengerName || "customer"}?`);
+      if (!ok) return;
+      await patchBooking(active.id, {
+        status: "cancelled",
+        cancelledBy: currentRiderAccount.id,
+        cancelledAtMs: Date.now()
+      });
+      showToast("Trip cancelled.", "info");
+    };
+
+    window.completeActiveRide = async function () {
+      const active = getMyActiveBooking();
+      if (!active) return;
+      const calc = computeExactMeter(active);
+      const finalAmount = active.meterStartedAtMs ? calc.total : (active.estimateFare ?? active.fare ?? calc.total);
+      const ok = await askConfirm("Complete Trip?", `Confirm completion with exact fare of ₱${finalAmount}?`);
+      if (!ok) return;
+
+      await patchBooking(active.id, {
+        status: "completed",
+        meterDistanceKm: Number(calc.mDist.toFixed(2)),
+        meterTimeCharge: calc.timeCharge,
+        meterFare: finalAmount,
+        fare: finalAmount,
+        completedAtMs: Date.now()
+      });
+      showToast(`Trip completed! Fare: ₱${finalAmount}`, "success");
+    };
+
+    async function patchBooking(bookingId, updates) {
+      if (isFirebaseLive && currentUser) {
+        try {
+          const docRef = doc(db, "artifacts", appId, "public", "data", "habal_bookings", bookingId);
+          await updateDoc(docRef, updates);
+          return;
+        } catch (e) {}
+      }
+      const item = allBookings.find((b) => b.id === bookingId);
+      if (item) {
+        Object.assign(item, updates);
+        broadcastLocalUpdate();
+        renderRiderView();
+      }
+    }
+
+    function updateRiderMap(booking) {
+      if (typeof L === "undefined" || !booking) return;
+      if (!riderMap) {
+        riderMap = L.map("rider-live-map", { zoomControl: true }).setView([8.5615, 124.5085], 13);
+        L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19 }).addTo(riderMap);
+      }
+      riderMap.invalidateSize();
+      if (riderMap._layerGroup) {
+        riderMap._layerGroup.clearLayers();
+      } else {
+        riderMap._layerGroup = L.layerGroup().addTo(riderMap);
+      }
+
+      const isSugo = booking.serviceType === "sugo";
+      const dCoords = booking.dropoffCoords || booking.pickupCoords || { lat: 8.5615, lng: 124.5085 };
+      const points = [];
+
+      if (isSugo) {
+        L.marker([dCoords.lat, dCoords.lng], {
+          icon: L.divIcon({ className: "", html: `<div class="pin-dropoff-marker">D</div>`, iconSize: [28, 28], iconAnchor: [14, 14] })
+        }).bindPopup("Customer GPS Drop-off").addTo(riderMap._layerGroup);
+        points.push([dCoords.lat, dCoords.lng]);
+      } else {
+        const pCoords = booking.pickupCoords || { lat: 8.5668, lng: 124.4765 };
+        L.marker([pCoords.lat, pCoords.lng], {
+          icon: L.divIcon({ className: "", html: `<div class="pin-pickup-marker">P</div>`, iconSize: [28, 28], iconAnchor: [14, 14] })
+        }).bindPopup("Pickup").addTo(riderMap._layerGroup);
+
+        L.marker([dCoords.lat, dCoords.lng], {
+          icon: L.divIcon({ className: "", html: `<div class="pin-dropoff-marker">D</div>`, iconSize: [28, 28], iconAnchor: [14, 14] })
+        }).bindPopup("Drop-off").addTo(riderMap._layerGroup);
+
+        L.polyline([[pCoords.lat, pCoords.lng], [dCoords.lat, dCoords.lng]], { color: "#059669", weight: 4 }).addTo(riderMap._layerGroup);
+        points.push([pCoords.lat, pCoords.lng], [dCoords.lat, dCoords.lng]);
+      }
+
+      const rPos = booking.riderCoords || riderCoords;
+      if (rPos) {
+        points.push([rPos.lat, rPos.lng]);
+        L.marker([rPos.lat, rPos.lng], {
+          icon: L.divIcon({ className: "", html: `<div class="moto-map-marker"><i class="fa-solid fa-motorcycle"></i></div>`, iconSize: [38, 38], iconAnchor: [19, 19] })
+        }).bindPopup("You").addTo(riderMap._layerGroup);
+      }
+
+      if (points.length >= 2) {
+        riderMap.fitBounds(L.latLngBounds(points), { padding: [24, 24], maxZoom: 15 });
+      } else if (points.length === 1) {
+        riderMap.setView(points[0], 15);
+      }
+    }
+
+    function renderEarningsAndHistory() {
+      if (!currentRiderAccount) return;
+
+      const myPastRides = allBookings
+        .filter((b) => b.riderId === currentRiderAccount.id && (b.status === "completed" || b.status === "cancelled"))
+        .sort((a, b) => (b.completedAtMs || b.cancelledAtMs || b.createdAtMs || 0) - (a.completedAtMs || a.cancelledAtMs || a.createdAtMs || 0));
+
+      const completedRides = myPastRides.filter((b) => b.status === "completed");
+      const cancelledRides = myPastRides.filter((b) => b.status === "cancelled");
+
+      const totalEarnings = completedRides.reduce((sum, r) => sum + Number(r.fare ?? r.meterFare ?? r.estimateFare ?? 0), 0);
+
+      document.getElementById("rider-earnings-total").textContent = `₱${totalEarnings.toLocaleString("en-PH")}`;
+      document.getElementById("rider-stat-completed").textContent = String(completedRides.length);
+      document.getElementById("rider-stat-cancelled").textContent = String(cancelledRides.length);
+      document.getElementById("rider-stat-total-rides").textContent = String(myPastRides.length);
+
+      const filtered = myPastRides.filter((r) => historyFilter === "ALL" || r.status === historyFilter);
+      const listEl = document.getElementById("rider-history-list");
+
+      if (filtered.length === 0) {
+        listEl.innerHTML = `<div class="p-5 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">No trip history yet.</div>`;
+        return;
+      }
+
+      listEl.innerHTML = filtered.map((r) => {
+        const isDone = r.status === "completed";
+        const isSugo = r.serviceType === "sugo";
+        const amount = Number(r.fare ?? r.meterFare ?? r.estimateFare ?? 0);
+        const whenStr = formatTripDate(r.completedAtMs || r.cancelledAtMs || r.createdAtMs);
+        return `
+          <div class="rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 space-y-1.5 text-xs">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5 min-w-0">
+                <span class="px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase ${
+                  isDone ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-700"
+                }">${isDone ? "Completed" : "Cancelled"}</span>
+                <span class="px-1.5 py-0.5 rounded text-[10px] font-extrabold uppercase bg-slate-200 text-slate-700">${isSugo ? "SUGO" : "RIDE"}</span>
+                <span class="font-bold text-slate-900 truncate">${escapeHTML(r.passengerName || "Passenger")}</span>
+              </div>
+              <span class="font-extrabold ${isDone ? "text-emerald-700" : "text-slate-400 line-through"} whitespace-nowrap">₱${amount}</span>
+            </div>
+
+            ${isSugo ? `
+              ${r.sugoStore ? `<p class="text-[11px] text-emerald-900 font-semibold truncate"><strong>Store:</strong> ${escapeHTML(r.sugoStore)}</p>` : ""}
+              ${r.sugoMessage ? `<p class="text-[11px] text-slate-700 truncate"><strong>Sugo:</strong> ${escapeHTML(r.sugoMessage)}</p>` : ""}
+              <p class="text-[11px] text-slate-600 truncate"><strong class="text-amber-600">Drop-off GPS:</strong> ${escapeHTML(r.dropoffName || "---")}</p>
+            ` : `
+              <p class="text-[11px] text-slate-600 truncate"><strong class="text-emerald-700">From:</strong> ${escapeHTML(r.pickupName || "---")}</p>
+              <p class="text-[11px] text-slate-600 truncate"><strong class="text-amber-600">To:</strong> ${escapeHTML(r.dropoffName || "---")}</p>
+            `}
+            ${whenStr ? `<p class="text-[10px] text-slate-400">${escapeHTML(whenStr)}</p>` : ""}
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderRiderView() {
+      if (!currentRiderAccount) return;
+
+      fareConfig = loadFareConfig();
+      syncRiderAuthGateUI();
+      renderEarningsAndHistory();
+
+      const approved = isRiderApproved();
+      const active = getMyActiveBooking();
+      const activeCard = document.getElementById("rider-active-card");
+      const pendingSection = document.getElementById("rider-pending-section");
+
+      if (active) {
+        activeCard.classList.remove("hidden");
+        pendingSection.classList.add("hidden");
+
+        const isSugo = active.serviceType === "sugo";
+        document.getElementById("rider-active-badge").textContent = isSugo ? "Active Sugo" : "Active Ride";
+        document.getElementById("rider-active-type-badge").textContent = isSugo ? "SUGO" : "RIDE";
+        document.getElementById("rider-active-passenger").textContent = active.passengerName || "Passenger";
+        document.getElementById("rider-active-phone").textContent = active.passengerPhone || "";
+        document.getElementById("rider-call-passenger").href = `tel:${active.passengerPhone || ""}`;
+
+        const sugoBox = document.getElementById("rider-active-sugo-box");
+        const sugoMsgEl = document.getElementById("rider-active-sugo-message");
+        const sugoStoreEl = document.getElementById("rider-active-sugo-store");
+        if (isSugo && active.sugoMessage) {
+          sugoBox.classList.remove("hidden");
+          sugoMsgEl.textContent = active.sugoMessage;
+          if (active.sugoStore) {
+            sugoStoreEl.textContent = `Asa Paliton / Store: ${active.sugoStore}`;
+            sugoStoreEl.classList.remove("hidden");
+          } else {
+            sugoStoreEl.classList.add("hidden");
+          }
+        } else {
+          sugoBox.classList.add("hidden");
+        }
+
+        const pickupRow = document.getElementById("rider-active-pickup-row");
+        const dropoffLabel = document.getElementById("rider-active-dropoff-label");
+        if (isSugo) {
+          pickupRow.classList.add("hidden");
+          dropoffLabel.textContent = "Drop-off / Customer GPS";
+        } else {
+          pickupRow.classList.remove("hidden");
+          dropoffLabel.textContent = "Drop-off Barangay";
+          document.getElementById("rider-active-pickup").textContent = active.pickupName || "---";
+        }
+
+        document.getElementById("rider-active-dropoff").textContent = active.dropoffName || "---";
+
+        const pNote = document.getElementById("rider-active-pickup-note");
+        if (!isSugo && active.pickupNote) {
+          pNote.textContent = `Note: ${active.pickupNote}`;
+          pNote.classList.remove("hidden");
+        } else {
+          pNote.classList.add("hidden");
+        }
+
+        const dNote = document.getElementById("rider-active-dropoff-note");
+        if (active.dropoffNote) {
+          dNote.textContent = `Note: ${active.dropoffNote}`;
+          dNote.classList.remove("hidden");
+        } else {
+          dNote.classList.add("hidden");
+        }
+
+        const meterStarted = Boolean(active.meterStartedAtMs);
+        const calc = computeExactMeter(active);
+        const estVal = active.estimateFare ?? active.fare ?? calc.baseFare;
+
+        document.getElementById("rider-meter-base").textContent = `₱${calc.baseFare}`;
+        document.getElementById("rider-meter-distance").textContent = `${calc.mDist.toFixed(2)} km • ₱${calc.distanceCharge}`;
+        document.getElementById("rider-meter-time").textContent = `${formatElapsed(calc.elapsedMs)} • ₱${calc.timeCharge}`;
+
+        const pickupBtn = document.getElementById("btn-rider-pickup");
+        const statusBadge = document.getElementById("rider-meter-status-badge");
+        const liveTag = document.getElementById("rider-meter-live-tag");
+        const totalLabel = document.getElementById("rider-meter-total-label");
+        const totalEl = document.getElementById("rider-meter-total");
+        document.getElementById("btn-rider-complete-label").textContent = isSugo ? "Complete Sugo" : "Complete Trip";
+
+        if (meterStarted) {
+          statusBadge.className = "text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-600 text-white";
+          statusBadge.textContent = "Picked Up • Meter Running";
+          liveTag.className = "text-[11px] font-extrabold text-emerald-700";
+          liveTag.textContent = "Live";
+          totalLabel.textContent = "TOTAL (EXACT)";
+          totalEl.textContent = `₱${calc.total}`;
+          pickupBtn.disabled = true;
+          pickupBtn.className = "w-full min-h-[48px] px-4 rounded-xl bg-emerald-100 text-emerald-800 font-extrabold text-sm flex items-center justify-center gap-2 cursor-default";
+          pickupBtn.innerHTML = `<i class="fa-solid fa-check-circle"></i><span>Meter Running</span>`;
+        } else {
+          statusBadge.className = "text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-100 text-amber-800";
+          statusBadge.textContent = "Not Picked Up Yet • Standby";
+          liveTag.className = "text-[11px] font-bold text-slate-500";
+          liveTag.textContent = "Standby";
+          totalLabel.textContent = "TOTAL (ESTIMATE)";
+          totalEl.textContent = `₱${estVal}`;
+          pickupBtn.disabled = false;
+          pickupBtn.className = "w-full min-h-[48px] px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-sm shadow-sm flex items-center justify-center gap-2 transition";
+          pickupBtn.innerHTML = `<i class="fa-solid fa-play"></i><span>${isSugo ? "Pick Up / Start Meter" : "Pick Up Passenger (Start Meter)"}</span>`;
+        }
+
+        updateRiderMap(active);
+      } else {
+        activeCard.classList.add("hidden");
+        pendingSection.classList.remove("hidden");
+
+        const pendingList = allBookings.filter((b) => b.status === "pending");
+        document.getElementById("pending-count-badge").textContent = String(pendingList.length);
+
+        if (approved && pendingList.length > lastPendingCount && riderOnline) {
+          playNewBookingAlert();
+          showToast("New request received from index.html!", "info");
+        }
+        lastPendingCount = pendingList.length;
+
+        const container = document.getElementById("rider-pending-list");
+        if (!approved) {
+          container.innerHTML = `<div class="p-6 text-center text-xs text-amber-800 bg-amber-50/70 rounded-xl border border-dashed border-amber-300">Your account is waiting for Admin approval before you can accept bookings.</div>`;
+        } else if (pendingList.length === 0) {
+          container.innerHTML = `<div class="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">No pending bookings right now.</div>`;
+        } else {
+          container.innerHTML = pendingList.map((b) => {
+            const est = b.estimateFare ?? b.fare ?? 0;
+            const isSugo = b.serviceType === "sugo";
+            return `
+              <div class="rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 space-y-2.5">
+                <div class="flex items-start justify-between gap-2">
+                  <div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[10px] font-mono text-slate-400">#${escapeHTML(String(b.id).slice(-6).toUpperCase())}</span>
+                      <span class="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
+                        isSugo ? "bg-emerald-100 text-emerald-800" : "bg-slate-200 text-slate-700"
+                      }">${isSugo ? "SUGO" : "RIDE"}</span>
+                    </div>
+                    <h4 class="text-sm font-extrabold text-slate-900 mt-0.5">${escapeHTML(b.passengerName || "Passenger")}</h4>
+                    <p class="text-xs text-slate-500">${escapeHTML(b.passengerPhone || "")}</p>
+                  </div>
+                  <div class="text-right">
+                    <span class="text-[10px] text-slate-400 block">Estimate</span>
+                    <span class="text-lg font-extrabold text-amber-600">₱${est}</span>
+                  </div>
+                </div>
+
+                ${isSugo ? `
+                  <div class="text-xs space-y-1.5 bg-emerald-50/70 p-2.5 rounded-lg border border-emerald-200">
+                    ${b.sugoStore ? `<p class="font-bold text-emerald-900"><i class="fa-solid fa-store mr-1 text-emerald-700"></i>Store: ${escapeHTML(b.sugoStore)}</p>` : ""}
+                    ${b.sugoMessage ? `<p class="text-slate-900 whitespace-pre-line font-semibold">${escapeHTML(b.sugoMessage)}</p>` : ""}
+                    <p class="pt-1 border-t border-emerald-200/70"><strong class="text-amber-600">Drop-off GPS:</strong> ${escapeHTML(b.dropoffName || "---")}</p>
+                    ${b.dropoffNote ? `<p class="text-slate-500 italic">Note: ${escapeHTML(b.dropoffNote)}</p>` : ""}
+                  </div>
+                ` : `
+                  <div class="text-xs space-y-1 bg-white p-2.5 rounded-lg border border-slate-200/70">
+                    <p><strong class="text-emerald-700">Pickup:</strong> ${escapeHTML(b.pickupName || "---")}</p>
+                    <p><strong class="text-amber-600">Drop-off:</strong> ${escapeHTML(b.dropoffName || "---")}</p>
+                    ${b.pickupNote ? `<p class="text-slate-500 italic">Note: ${escapeHTML(b.pickupNote)}</p>` : ""}
+                  </div>
+                `}
+
+                <button type="button" onclick="acceptPendingBooking('${escapeHTML(String(b.id))}')"
+                  class="w-full min-h-[46px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-sm flex items-center justify-center gap-2 transition">
+                  <i class="fa-solid fa-check"></i>
+                  <span>${isSugo ? "Accept Sugo" : "Accept Ride"}</span>
+                </button>
+              </div>
+            `;
+          }).join("");
+        }
+      }
+    }
+
+    function initBroadcastChannel() {
+      if ("BroadcastChannel" in window) {
+        realtimeChannel = new BroadcastChannel(CHANNEL_NAME);
+        realtimeChannel.onmessage = (event) => {
+          if (event.data && event.data.type === "FARE_CONFIG_UPDATED") {
+            fareConfig = loadFareConfig();
+            renderRiderView();
+            showToast(`Rates updated: Base ₱${fareConfig.baseFare}, ₱${fareConfig.ratePerKm}/km, ₱${fareConfig.timeRatePerMin}/min`, "info");
+          } else if (!isFirebaseLive && event.data && event.data.type === "BOOKINGS_UPDATED") {
+            allBookings = loadLocalBookings();
+            renderRiderView();
+          } else if (event.data && event.data.type === "ACCOUNTS_UPDATED") {
+            renderRiderView();
+          }
+        };
+      }
+    }
+
+    function broadcastLocalUpdate() {
+      try {
+        localStorage.setItem(STORAGE_KEY_BOOKINGS, JSON.stringify(allBookings));
+      } catch (e) {}
+      if (realtimeChannel) {
+        realtimeChannel.postMessage({ type: "BOOKINGS_UPDATED", at: Date.now() });
+      }
+    }
+
+    function loadLocalBookings() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_BOOKINGS);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e) {}
+      return [];
+    }
+
+    window.addEventListener("storage", (event) => {
+      if (event.key === STORAGE_KEY_FARE_CONFIG) {
+        fareConfig = loadFareConfig();
+        renderRiderView();
+      } else if (event.key === STORAGE_KEY_BOOKINGS && !isFirebaseLive) {
+        allBookings = loadLocalBookings();
+        renderRiderView();
+      } else if (event.key === STORAGE_KEY_ACCOUNTS) {
+        renderRiderView();
+      }
+    });
+
+    async function initStorageEngine() {
+      try {
+        if (typeof __firebase_config === "undefined" || !__firebase_config) throw new Error("Local mode");
+        const config = JSON.parse(__firebase_config);
+        if (!config || !config.apiKey) throw new Error("Missing API key");
+        const app = initializeApp(config);
+        auth = getAuth(app);
+        db = getFirestore(app);
+        if (typeof __initial_auth_token !== "undefined" && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+        currentUser = auth.currentUser;
+        if (!currentUser) throw new Error("No auth user");
+        isFirebaseLive = true;
+        const bookingsCol = collection(db, "artifacts", appId, "public", "data", "habal_bookings");
+        onSnapshot(bookingsCol, (snap) => {
+          const items = [];
+          snap.forEach((docSnap) => items.push({ id: docSnap.id, ...docSnap.data() }));
+          items.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+          allBookings = items;
+          renderRiderView();
+        }, () => fallbackToLocalSync());
+      } catch (e) {
+        fallbackToLocalSync();
+      }
+    }
+
+    function fallbackToLocalSync() {
+      isFirebaseLive = false;
+      allBookings = loadLocalBookings();
+      renderRiderView();
+    }
+
+    function showToast(message, type = "info") {
+      const container = document.getElementById("toast-container");
+      const el = document.createElement("div");
+      const styles = {
+        success: "bg-emerald-700 text-white border-emerald-600",
+        error: "bg-red-600 text-white border-red-500",
+        warning: "bg-amber-600 text-white border-amber-500",
+        info: "bg-slate-900 text-white border-slate-700"
+      };
+      el.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-lg text-xs font-bold ${styles[type] || styles.info}`;
+      el.textContent = message;
+      container.appendChild(el);
+      setTimeout(() => el.remove(), 3000);
+    }
+
+    function askConfirm(title, message) {
+      return new Promise((resolve) => {
+        const modal = document.getElementById("confirm-modal");
+        document.getElementById("confirm-title").textContent = title;
+        document.getElementById("confirm-message").textContent = message;
+        modal.classList.remove("hidden");
+        const okBtn = document.getElementById("confirm-ok-btn");
+        const cancelBtn = document.getElementById("confirm-cancel-btn");
+        const done = (val) => {
+          modal.classList.add("hidden");
+          okBtn.onclick = null;
+          cancelBtn.onclick = null;
+          resolve(val);
+        };
+        okBtn.onclick = () => done(true);
+        cancelBtn.onclick = () => done(false);
+      });
+    }
+
+    function escapeHTML(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    setInterval(() => {
+      if (!currentRiderAccount) return;
+      if (!isFirebaseLive) {
+        allBookings = loadLocalBookings();
+        renderRiderView();
+      } else {
+        const active = getMyActiveBooking();
+        if (active && active.meterStartedAtMs) renderRiderView();
+      }
+
+      const active = getMyActiveBooking();
+      const now = Date.now();
+      if (active && active.meterStartedAtMs && now - lastMeterTickMs >= 5000 && "geolocation" in navigator) {
+        lastMeterTickMs = now;
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const nextCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            riderCoords = nextCoords;
+            updateActiveRiderPosition(nextCoords);
+          },
+          () => {},
+          { enableHighAccuracy: true, maximumAge: 3000 }
+        );
+      }
+    }, 1000);
+
+    try {
+      const savedSession = localStorage.getItem(STORAGE_KEY_RIDER_SESSION);
+      if (savedSession) {
+        const parsed = JSON.parse(savedSession);
+        if (parsed && parsed.role === "rider") {
+          currentRiderAccount = parsed;
+        }
+      }
+    } catch (e) {}
+
+    syncRiderAuthGateUI();
+    initBroadcastChannel();
+    if (currentRiderAccount) {
+      triggerRiderGPS(false);
+    }
+    initStorageEngine();
+
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
