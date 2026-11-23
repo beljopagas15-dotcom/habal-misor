@@ -1,0 +1,2120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Habal-Habal | Online Passenger Booking</title>
+  <link rel="manifest" href="./costumer-manifest.json" />
+  <meta name="theme-color" content="#059669" />
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+  <!-- Leaflet Interactive Map -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f1f5f9;
+      color: #0f172a;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    @keyframes soft-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.08); opacity: 0.75; }
+    }
+    .animate-soft-pulse {
+      animation: soft-pulse 1.8s infinite ease-in-out;
+    }
+
+    .moto-map-marker {
+      width: 38px;
+      height: 38px;
+      border-radius: 9999px;
+      background: #059669;
+      color: #ffffff;
+      border: 3px solid #ffffff;
+      box-shadow: 0 8px 18px rgba(5, 150, 105, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      transition: transform 0.2s ease;
+    }
+
+    .pin-pickup-marker {
+      width: 28px;
+      height: 28px;
+      border-radius: 9999px;
+      background: #10b981;
+      color: #ffffff;
+      border: 3px solid #ffffff;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .pin-dropoff-marker {
+      width: 28px;
+      height: 28px;
+      border-radius: 9999px;
+      background: #f59e0b;
+      color: #ffffff;
+      border: 3px solid #ffffff;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-900 flex flex-col items-center">
+
+  <div id="toast-container" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-[440px] pointer-events-none flex flex-col gap-2"></div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirm-modal" class="fixed inset-0 z-50 hidden bg-slate-900/50 flex items-center justify-center p-4">
+    <div class="bg-white border border-slate-200 rounded-2xl w-full max-w-sm p-5 shadow-2xl">
+      <div class="flex items-center gap-3 mb-2">
+        <div class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+          <i class="fa-solid fa-circle-question text-lg"></i>
+        </div>
+        <h3 id="confirm-title" class="text-base font-bold text-slate-900">Confirm Action</h3>
+      </div>
+      <p id="confirm-message" class="text-sm text-slate-600 mb-5 leading-relaxed">Are you sure you want to continue?</p>
+      <div class="flex gap-2.5">
+        <button id="confirm-cancel-btn" type="button" onclick="playTapSound()" class="flex-1 min-h-[46px] px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-sm transition">
+          No, Keep Ride
+        </button>
+        <button id="confirm-ok-btn" type="button" onclick="playTapSound()" class="flex-1 min-h-[46px] px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm transition shadow-sm">
+          Yes, Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Drop-off Barangay Picker Modal (Ride Mode) -->
+  <div id="location-modal" class="fixed inset-0 z-50 hidden bg-slate-900/50 flex items-end sm:items-center justify-center sm:p-4">
+    <div class="bg-white w-full max-w-[480px] rounded-t-3xl sm:rounded-2xl border border-slate-200 shadow-2xl flex flex-col max-h-[85vh]">
+      <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <span class="text-[11px] font-bold uppercase tracking-wider text-amber-600">Drop-off Barangay</span>
+          <h3 class="text-base font-extrabold text-slate-900">Select Destination Barangay</h3>
+        </div>
+        <button type="button" onclick="playTapSound(); closeLocationModal()" class="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="p-3.5 bg-slate-50 border-b border-slate-100 space-y-2.5">
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+          <input type="text" id="location-search-input" oninput="renderLocationModalList()" placeholder="Search barangay..."
+            class="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 text-sm text-slate-900 outline-none" />
+        </div>
+
+        <div class="flex gap-1.5 overflow-x-auto pb-0.5">
+          <button type="button" onclick="playTapSound(); setModalCityFilter('ALL')" data-city="ALL" id="city-pill-all"
+            class="city-filter-pill px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-600 text-white shrink-0 transition">
+            All
+          </button>
+          <button type="button" onclick="playTapSound(); setModalCityFilter('Alubijid')" data-city="Alubijid"
+            class="city-filter-pill px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 shrink-0 transition">
+            Alubijid
+          </button>
+          <button type="button" onclick="playTapSound(); setModalCityFilter('Laguindingan')" data-city="Laguindingan"
+            class="city-filter-pill px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 shrink-0 transition">
+            Laguindingan
+          </button>
+          <button type="button" onclick="playTapSound(); setModalCityFilter('El Salvador City')" data-city="El Salvador City"
+            class="city-filter-pill px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 shrink-0 transition">
+            El Salvador
+          </button>
+          <button type="button" onclick="playTapSound(); setModalCityFilter('Opol')" data-city="Opol"
+            class="city-filter-pill px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 shrink-0 transition">
+            Opol
+          </button>
+        </div>
+      </div>
+
+      <div id="location-modal-list" class="flex-1 overflow-y-auto divide-y divide-slate-100 p-2"></div>
+    </div>
+  </div>
+
+  <!-- Suggestion / Comment / Report Modal -->
+  <div id="feedback-modal" class="fixed inset-0 z-50 hidden bg-slate-900/50 flex items-end sm:items-center justify-center sm:p-4">
+    <div class="bg-white w-full max-w-[480px] rounded-t-3xl sm:rounded-2xl border border-slate-200 shadow-2xl flex flex-col max-h-[90vh]">
+      <div class="p-4 border-b border-slate-100 flex items-center justify-between">
+        <div>
+          <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-600">Passenger Voice</span>
+          <h3 class="text-base font-extrabold text-slate-900">Suggestion, Comment, or Report</h3>
+        </div>
+        <button type="button" onclick="playTapSound(); closeFeedbackModal()" class="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <form id="feedback-form" onsubmit="submitPassengerFeedback(event)" class="p-4 space-y-3.5 overflow-y-auto">
+        <div>
+          <label class="block text-xs font-bold text-slate-700 mb-1.5">Select Type *</label>
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" onclick="playTapSound(); setFeedbackType('Suggestion')" data-fb-type="Suggestion"
+              class="fb-type-btn py-2.5 px-2 rounded-xl border-2 border-emerald-600 bg-emerald-50 text-emerald-800 text-xs font-extrabold flex flex-col items-center gap-1 transition">
+              <i class="fa-solid fa-lightbulb text-sm"></i>
+              <span>Suggestion</span>
+            </button>
+            <button type="button" onclick="playTapSound(); setFeedbackType('Comment')" data-fb-type="Comment"
+              class="fb-type-btn py-2.5 px-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-bold flex flex-col items-center gap-1 transition">
+              <i class="fa-solid fa-comment-dots text-sm"></i>
+              <span>Comment</span>
+            </button>
+            <button type="button" onclick="playTapSound(); setFeedbackType('Report')" data-fb-type="Report"
+              class="fb-type-btn py-2.5 px-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-bold flex flex-col items-center gap-1 transition">
+              <i class="fa-solid fa-triangle-exclamation text-sm"></i>
+              <span>Report</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Your Name</label>
+            <input type="text" id="fb-name" readonly
+              class="w-full min-h-[42px] px-3 py-2 rounded-xl bg-slate-100 border border-slate-200 text-sm text-slate-700 outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Mobile / Booking #</label>
+            <input type="text" id="fb-contact" placeholder="09XX... or #BK-123"
+              class="w-full min-h-[42px] px-3 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+          </div>
+        </div>
+
+        <div>
+          <label id="fb-message-label" class="block text-xs font-bold text-slate-700 mb-1">Your Suggestion *</label>
+          <textarea id="fb-message" rows="4" required placeholder="Write your suggestion to improve our Habal-Habal service..."
+            class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 text-sm text-slate-900 placeholder-slate-400 outline-none resize-none"></textarea>
+        </div>
+
+        <button type="submit" id="btn-submit-feedback"
+          class="w-full min-h-[48px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-sm flex items-center justify-center gap-2 transition">
+          <i class="fa-solid fa-paper-plane"></i>
+          <span>Send to Admin</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main Customer Container -->
+  <div class="w-full max-w-[480px] min-h-screen bg-slate-50 shadow-xl border-x border-slate-200/80 flex flex-col">
+
+    <header class="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 py-3.5">
+      <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-sm shadow-emerald-600/20 shrink-0">
+            <i class="fa-solid fa-motorcycle text-lg"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <h1 class="font-extrabold text-base tracking-tight text-slate-900 truncate">Habal-Habal</h1>
+              <span class="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">PASSENGER</span>
+            </div>
+            <p id="passenger-account-subtitle" class="text-[11px] text-slate-500 truncate">Alubijid • Laguindingan • El Salvador • Opol</p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button type="button" id="btn-logout-passenger" onclick="playTapSound(); logoutPassengerAccount()"
+            class="hidden min-h-[34px] px-2.5 rounded-full bg-slate-100 hover:bg-red-50 border border-slate-200 text-slate-700 hover:text-red-600 text-[11px] font-bold flex items-center gap-1 transition">
+            <i class="fa-solid fa-right-from-bracket"></i>
+            <span>Log Out</span>
+          </button>
+
+          <button type="button" id="btn-sound-toggle" onclick="toggleSoundSystem()" title="Toggle Alerts & Tap Sounds"
+            class="min-h-[34px] px-2.5 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 text-[11px] font-bold flex items-center gap-1 transition">
+            <i id="sound-icon" class="fa-solid fa-volume-high"></i>
+            <span id="sound-label">Sound ON</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <main class="flex-1 p-4 space-y-4">
+
+      <!-- REQUIRED LOG IN / CREATE ACCOUNT GATE -->
+      <section id="passenger-auth-card" class="bg-white rounded-2xl border-2 border-emerald-500 p-4 sm:p-5 shadow-md space-y-4">
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">Account Required</span>
+            <h2 id="auth-heading" class="text-lg font-extrabold text-slate-900 mt-1">Passenger Log In</h2>
+            <p id="auth-subtext" class="text-xs text-slate-500">Log in or create an account to book, sugo, and report.</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
+          <button type="button" id="tab-auth-login" onclick="playTapSound(); switchAuthMode('login')"
+            class="py-2 rounded-lg text-xs font-extrabold bg-white text-emerald-700 shadow-xs transition">
+            Log In
+          </button>
+          <button type="button" id="tab-auth-register" onclick="playTapSound(); switchAuthMode('register')"
+            class="py-2 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition">
+            Create Account
+          </button>
+        </div>
+
+        <!-- Log In Form -->
+        <form id="passenger-login-form" onsubmit="handlePassengerLogin(event)" class="space-y-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Mobile Number *</label>
+            <input type="tel" id="login-phone" required placeholder="09XX XXX XXXX"
+              class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Password / PIN *</label>
+            <input type="password" id="login-password" required placeholder="Enter your password or PIN"
+              class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+          </div>
+          <button type="submit"
+            class="w-full min-h-[48px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-sm flex items-center justify-center gap-2 transition">
+            <i class="fa-solid fa-right-to-bracket"></i>
+            <span>Log In to Continue</span>
+          </button>
+        </form>
+
+        <!-- Create Account Form -->
+        <form id="passenger-register-form" onsubmit="handlePassengerRegister(event)" class="hidden space-y-3">
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Full Name *</label>
+            <input type="text" id="reg-name" required placeholder="e.g. Maria Santos"
+              class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Mobile Number *</label>
+            <input type="tel" id="reg-phone" required placeholder="09XX XXX XXXX"
+              class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-slate-700 mb-1">Create Password / PIN *</label>
+            <input type="password" id="reg-password" required minlength="4" placeholder="At least 4 characters"
+              class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 text-sm text-slate-900 outline-none" />
+          </div>
+          <button type="submit"
+            class="w-full min-h-[48px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-sm flex items-center justify-center gap-2 transition">
+            <i class="fa-solid fa-user-plus"></i>
+            <span>Create Passenger Account</span>
+          </button>
+        </form>
+      </section>
+
+      <!-- PROTECTED APP CONTENT (Shown only when logged in) -->
+      <div id="passenger-app-content" class="hidden space-y-4">
+
+        <!-- Active Ride / Sugo Tracker Card -->
+        <section id="passenger-tracker-card" class="hidden bg-white rounded-2xl border-2 border-emerald-500 p-4 shadow-md space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div class="flex items-center gap-3 min-w-0">
+              <div id="tracker-status-icon" class="w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center animate-soft-pulse shrink-0">
+                <i class="fa-solid fa-magnifying-glass-location"></i>
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span id="tracker-status-title" class="text-xs font-extrabold uppercase tracking-wider text-amber-600">Finding a Rider...</span>
+                  <span id="tracker-service-badge" class="text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">RIDE</span>
+                </div>
+                <p id="tracker-booking-code" class="text-xs text-slate-400 font-mono">Booking #---</p>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <span id="tracker-fare-label" class="text-[11px] text-slate-400 block whitespace-nowrap">Estimate Fare</span>
+              <span id="tracker-fare" class="text-xl font-extrabold text-amber-600 whitespace-nowrap">₱0</span>
+            </div>
+          </div>
+
+          <!-- Sugo Message Box (Shown when serviceType === "sugo") -->
+          <div id="tracker-sugo-box" class="hidden rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 space-y-1.5">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-800 flex items-center gap-1">
+                <i class="fa-solid fa-bag-shopping"></i>
+                <span>Sugo Message</span>
+              </span>
+              <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-600 text-white">SUGO</span>
+            </div>
+            <p id="tracker-sugo-message" class="text-xs font-bold text-slate-900 whitespace-pre-line leading-relaxed">---</p>
+            <p id="tracker-sugo-store" class="text-[11px] text-emerald-900 font-semibold hidden"></p>
+          </div>
+
+          <!-- Simple 4-Line Meter Box (BASE FARE, DISTANCE RATE, RUNNING TIME, TOTAL) -->
+          <div id="tracker-meter-box" class="hidden rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 space-y-2 transition">
+            <div class="flex items-center justify-between gap-2 pb-1.5 border-b border-black/5">
+              <span id="tracker-meter-badge" class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 whitespace-nowrap">
+                Not Picked Up Yet • Meter Standby
+              </span>
+              <span id="tracker-meter-tag" class="text-[11px] font-bold text-slate-500 whitespace-nowrap">Standby</span>
+            </div>
+
+            <div class="space-y-1.5 text-xs">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-600">BASE FARE</span>
+                <span id="meter-line-base" class="font-extrabold text-slate-800 whitespace-nowrap">₱20</span>
+              </div>
+
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-600">DISTANCE RATE</span>
+                <span id="meter-line-distance" class="font-extrabold text-slate-800 whitespace-nowrap">0.00 km • ₱0</span>
+              </div>
+
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-600">RUNNING TIME</span>
+                <span id="meter-line-time" class="font-extrabold text-slate-800 whitespace-nowrap">00:00 • ₱0</span>
+              </div>
+
+              <div class="flex items-center justify-between pt-1.5 border-t border-emerald-200">
+                <span id="meter-line-total-label" class="text-xs font-extrabold uppercase tracking-wider text-emerald-800">TOTAL</span>
+                <span id="meter-line-total" class="text-lg font-extrabold text-emerald-700 whitespace-nowrap">₱20</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="font-bold text-slate-700 flex items-center gap-1.5">
+                <i class="fa-solid fa-route text-emerald-600"></i>
+                <span>Highway Route & Rider Position</span>
+              </span>
+              <span id="passenger-rider-eta" class="font-bold text-emerald-700 whitespace-nowrap">Live GPS</span>
+            </div>
+            <div id="passenger-live-map" class="w-full h-56 rounded-xl border border-slate-200 overflow-hidden z-10"></div>
+          </div>
+
+          <div class="bg-slate-50 rounded-xl p-3.5 space-y-2.5 border border-slate-200/70">
+            <div id="tracker-pickup-row" class="flex items-start gap-2.5">
+              <i class="fa-solid fa-circle-dot text-emerald-600 text-xs mt-1"></i>
+              <div class="flex-1">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span id="tracker-pickup-label" class="text-[10px] font-bold uppercase text-slate-400">Pickup</span>
+                  <span id="tracker-pickup-method" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800">Live GPS</span>
+                </div>
+                <p id="tracker-pickup" class="text-sm font-bold text-slate-900 mt-0.5">---</p>
+                <p id="tracker-pickup-note" class="text-xs text-slate-600 mt-0.5 hidden"></p>
+              </div>
+            </div>
+            <div id="tracker-route-divider" class="border-l-2 border-dashed border-slate-300 h-2.5 ml-1.5"></div>
+            <div class="flex items-start gap-2.5">
+              <i class="fa-solid fa-location-dot text-amber-600 text-xs mt-1"></i>
+              <div class="flex-1">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span id="tracker-dropoff-label" class="text-[10px] font-bold uppercase text-slate-400">Drop-off Barangay</span>
+                  <span id="tracker-dropoff-method" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800">Barangay</span>
+                </div>
+                <p id="tracker-dropoff" class="text-sm font-bold text-slate-900 mt-0.5">---</p>
+                <p id="tracker-dropoff-note" class="text-xs text-slate-600 mt-0.5 hidden"></p>
+              </div>
+            </div>
+          </div>
+
+          <div id="tracker-rider-box" class="hidden bg-emerald-50 border border-emerald-200 rounded-xl p-3.5 space-y-3">
+            <div class="flex items-center gap-3">
+              <div class="w-11 h-11 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                <i class="fa-solid fa-helmet-safety text-lg"></i>
+              </div>
+              <div class="flex-1 min-w-0">
+                <span id="tracker-rider-stage" class="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700 block">Rider Assigned!</span>
+                <h4 id="tracker-rider-name" class="text-base font-extrabold text-slate-900 truncate">Rider Name</h4>
+                <p id="tracker-rider-vehicle" class="text-xs font-medium text-slate-700 truncate">Honda TMX • ABC 123</p>
+              </div>
+            </div>
+
+            <a id="tracker-call-rider-link" href="tel:" onclick="playTapSound()"
+              class="w-full min-h-[48px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-sm transition">
+              <i class="fa-solid fa-phone"></i>
+              <span>Call Rider</span>
+            </a>
+          </div>
+
+          <div class="flex items-center justify-between gap-2 pt-1">
+            <span id="tracker-helper-text" class="text-xs text-slate-500">Waiting for an available rider...</span>
+            <button id="btn-passenger-cancel-ride" type="button" onclick="playTapSound(); cancelActivePassengerBooking()"
+              class="min-h-[40px] px-3.5 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 font-semibold text-xs border border-slate-200 transition shrink-0">
+              Cancel Ride
+            </button>
+          </div>
+        </section>
+
+        <!-- Booking Form Card -->
+        <section id="passenger-booking-card" class="bg-white rounded-2xl border border-slate-200/90 p-4 sm:p-5 shadow-xs space-y-4">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h2 id="booking-card-title" class="text-lg font-extrabold text-slate-900">Book a Habal-Habal</h2>
+              <p id="booking-card-subtitle" class="text-xs text-slate-500">Meter runs on Pick Up (Distance + Running Time).</p>
+            </div>
+            <span class="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold whitespace-nowrap">
+              ₱0 Booking Fee
+            </span>
+          </div>
+
+          <!-- Ride vs Sugo Mode Selector -->
+          <div class="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-xl">
+            <button type="button" id="btn-mode-ride" onclick="playTapSound(); setServiceMode('ride')"
+              class="py-2.5 px-3 rounded-lg text-xs font-extrabold bg-emerald-600 text-white shadow-xs flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-motorcycle"></i>
+              <span>Ride</span>
+            </button>
+            <button type="button" id="btn-mode-sugo" onclick="playTapSound(); setServiceMode('sugo')"
+              class="py-2.5 px-3 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-bag-shopping"></i>
+              <span>Sugo</span>
+            </button>
+          </div>
+
+          <form id="passenger-form" onsubmit="submitPassengerBooking(event)" class="space-y-4">
+
+            <!-- SUGO MESSAGE & STORE SECTION (Shown only when serviceMode === "sugo") -->
+            <div id="sugo-fields-box" class="hidden rounded-2xl border border-emerald-200 bg-emerald-50/50 p-3.5 space-y-3">
+              <div class="flex items-center justify-between">
+                <label for="input-sugo-message" class="text-xs font-extrabold text-slate-900 flex items-center gap-1.5">
+                  <i class="fa-solid fa-message text-emerald-600"></i>
+                  <span>Sugo Message *</span>
+                </label>
+                <span class="text-[10px] font-extrabold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">SUGO</span>
+              </div>
+
+              <textarea id="input-sugo-message" rows="3" placeholder="Ibilin diri ang message o listahan sa papalit (e.g. 2x tubig 1L, 1 pan)..."
+                class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 text-sm text-slate-900 placeholder-slate-400 outline-none resize-none transition"></textarea>
+
+              <div>
+                <label for="input-sugo-store" class="block text-xs font-bold text-slate-700 mb-1">Asa Paliton / Store *</label>
+                <input type="text" id="input-sugo-store" placeholder="Isulat diri asa paliton (e.g. Tindahan, Botika, Bakery)"
+                  class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 text-sm text-slate-900 placeholder-slate-400 outline-none transition" />
+              </div>
+            </div>
+
+            <!-- Live GPS Section (Pickup in Ride mode, Customer Drop-off Location in Sugo mode) -->
+            <div id="gps-location-section" class="space-y-2">
+              <div class="flex items-center justify-between gap-2">
+                <label class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                  <span id="gps-section-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+                  <span id="gps-section-label">Pickup Location *</span>
+                  <span id="pickup-set-badge" class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 whitespace-nowrap">GPS Required</span>
+                </label>
+                <button type="button" id="btn-use-gps" onclick="playTapSound(); triggerLiveGPS(true)"
+                  class="text-xs font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition shrink-0 whitespace-nowrap">
+                  <i class="fa-solid fa-location-crosshairs"></i>
+                  <span id="btn-gps-label">Use My GPS</span>
+                </button>
+              </div>
+
+              <div class="w-full min-h-[54px] px-3.5 py-2.5 rounded-xl bg-emerald-50/60 border border-emerald-200 flex items-center justify-between gap-2">
+                <div class="min-w-0 flex-1">
+                  <span id="pickup-display-city" class="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">Live GPS Pickup</span>
+                  <span id="pickup-display-name" class="text-sm font-bold text-slate-900 truncate block">Tap "Use My GPS" or allow Location permission</span>
+                </div>
+                <span class="text-[11px] font-bold text-emerald-800 bg-white px-2.5 py-1 rounded-lg border border-emerald-200 shrink-0 whitespace-nowrap">
+                  <i class="fa-solid fa-satellite-dish mr-1"></i>GPS Only
+                </span>
+              </div>
+
+              <div id="gps-status-badge" class="hidden text-[11px] text-emerald-900 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5 flex items-center justify-between gap-2">
+                <span id="gps-coords-text" class="truncate font-medium"><i class="fa-solid fa-location-dot mr-1 text-emerald-600"></i> GPS Locked</span>
+                <span id="gps-accuracy-text" class="text-[10px] font-bold text-emerald-700 shrink-0 whitespace-nowrap"></span>
+              </div>
+
+              <input type="text" id="input-pickup-note" oninput="updateBookingPreviewMap()" placeholder="Location Note / Purok / Landmark (Optional)"
+                class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 text-sm text-slate-900 placeholder-slate-400 outline-none transition" />
+            </div>
+
+            <!-- Drop-off Barangay Picker (Shown only in Ride mode) -->
+            <div id="dropoff-barangay-section" class="space-y-2">
+              <label class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                <span>Drop-off Barangay *</span>
+                <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 whitespace-nowrap">Barangay Only</span>
+              </label>
+
+              <button type="button" onclick="playTapSound(); openLocationModal()"
+                class="w-full min-h-[50px] px-3.5 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 focus:border-emerald-500 text-left flex items-center justify-between gap-2 transition">
+                <div class="min-w-0 flex-1">
+                  <span id="dropoff-display-city" class="text-[10px] font-bold uppercase tracking-wider text-amber-600 block">El Salvador City</span>
+                  <span id="dropoff-display-name" class="text-sm font-bold text-slate-900 truncate block">Brgy. Sinaloc</span>
+                </div>
+                <span class="text-xs font-semibold text-emerald-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shrink-0">
+                  Change
+                </span>
+              </button>
+
+              <input type="text" id="input-dropoff-note" placeholder="Drop-off Note / Purok (Optional)"
+                class="w-full min-h-[44px] px-3.5 py-2 rounded-xl bg-white border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 text-sm text-slate-900 placeholder-slate-400 outline-none transition" />
+            </div>
+
+            <!-- Highway Route Map Preview -->
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between text-[11px] gap-2">
+                <span class="font-bold text-slate-700 flex items-center gap-1.5 min-w-0">
+                  <i class="fa-solid fa-route text-emerald-600 shrink-0"></i>
+                  <span id="preview-route-caption" class="truncate">Highway Route Preview</span>
+                </span>
+                <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0 whitespace-nowrap">
+                  <i class="fa-solid fa-road mr-1"></i>Highway Path
+                </span>
+              </div>
+              <div id="booking-preview-map" class="w-full h-48 rounded-xl border border-slate-200 overflow-hidden z-10"></div>
+            </div>
+
+            <!-- Estimate Fare Box -->
+            <div class="rounded-2xl bg-amber-50/90 border border-amber-200 px-3.5 py-3 flex items-center justify-between gap-3">
+              <div class="min-w-0 flex-1">
+                <span id="estimate-fare-title" class="text-[11px] font-extrabold uppercase tracking-wider text-amber-800 block">Estimate Fare</span>
+                <div class="flex items-center gap-1.5 mt-1 flex-wrap">
+                  <span id="summary-distance" class="text-xs font-extrabold text-slate-900 whitespace-nowrap">-- km</span>
+                  <span class="text-slate-400">•</span>
+                  <span id="summary-fare-rule" class="text-[11px] text-slate-600 whitespace-nowrap">₱10/km + ₱1/min time</span>
+                </div>
+              </div>
+              <div class="text-right shrink-0">
+                <span id="summary-fare" class="text-2xl font-extrabold text-amber-600 leading-none block whitespace-nowrap">₱50</span>
+                <span class="block text-[10px] font-semibold text-slate-600 mt-1 whitespace-nowrap">Estimate • Meter on Pick Up</span>
+              </div>
+            </div>
+
+            <button type="submit" id="btn-submit-booking"
+              class="w-full min-h-[52px] px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-extrabold text-base shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 transition">
+              <i id="btn-submit-icon" class="fa-solid fa-motorcycle"></i>
+              <span id="btn-submit-label">Book Habal-Habal Now</span>
+            </button>
+          </form>
+        </section>
+
+        <!-- Suggestion, Comment, Report Card -->
+        <section class="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <h3 class="text-sm font-extrabold text-slate-900">Help Us Improve</h3>
+              <p class="text-[11px] text-slate-500">Send a suggestion, comment, or report an issue to Admin.</p>
+            </div>
+            <div class="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+              <i class="fa-solid fa-bullhorn text-sm"></i>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" onclick="playTapSound(); openFeedbackModal('Suggestion')"
+              class="min-h-[44px] px-2.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-lightbulb"></i>
+              <span>Suggestion</span>
+            </button>
+            <button type="button" onclick="playTapSound(); openFeedbackModal('Comment')"
+              class="min-h-[44px] px-2.5 py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-comment-dots"></i>
+              <span>Comment</span>
+            </button>
+            <button type="button" onclick="playTapSound(); openFeedbackModal('Report')"
+              class="min-h-[44px] px-2.5 py-2 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 text-xs font-bold flex items-center justify-center gap-1.5 transition">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              <span>Report</span>
+            </button>
+          </div>
+        </section>
+
+      </div>
+
+    </main>
+
+    <footer class="mt-auto border-t border-slate-200 bg-white px-4 py-3 text-center text-[11px] text-slate-500">
+      Habal-Habal • Alubijid • Laguindingan • El Salvador • Opol
+    </footer>
+
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, collection, doc, addDoc, updateDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const LOCATIONS = [
+      { id: "els_sinaloc", city: "El Salvador City", name: "Brgy. Sinaloc", lat: 8.5615, lng: 124.5085 },
+      { id: "alu_poblacion", city: "Alubijid", name: "Brgy. Poblacion", lat: 8.5675, lng: 124.4750 },
+      { id: "alu_baybay", city: "Alubijid", name: "Brgy. Baybay", lat: 8.5740, lng: 124.4760 },
+      { id: "alu_benigwayan", city: "Alubijid", name: "Brgy. Benigwayan", lat: 8.5230, lng: 124.4620 },
+      { id: "alu_calatcat", city: "Alubijid", name: "Brgy. Calatcat", lat: 8.5140, lng: 124.4510 },
+      { id: "alu_lagtang", city: "Alubijid", name: "Brgy. Lagtang", lat: 8.5450, lng: 124.4580 },
+      { id: "alu_lanao", city: "Alubijid", name: "Brgy. Lanao", lat: 8.5580, lng: 124.4640 },
+      { id: "alu_loguilo", city: "Alubijid", name: "Brgy. Loguilo", lat: 8.5620, lng: 124.4880 },
+      { id: "alu_lourdes", city: "Alubijid", name: "Brgy. Lourdes", lat: 8.5480, lng: 124.4750 },
+      { id: "alu_lumbo", city: "Alubijid", name: "Brgy. Lumbo", lat: 8.5320, lng: 124.4780 },
+      { id: "alu_molocboloc", city: "Alubijid", name: "Brgy. Molocboloc", lat: 8.5690, lng: 124.4630 },
+      { id: "alu_sampatulog", city: "Alubijid", name: "Brgy. Sampatulog", lat: 8.5180, lng: 124.4720 },
+      { id: "alu_sungay", city: "Alubijid", name: "Brgy. Sungay", lat: 8.5350, lng: 124.4860 },
+      { id: "alu_talaba", city: "Alubijid", name: "Brgy. Talaba", lat: 8.5520, lng: 124.4920 },
+      { id: "alu_taparak", city: "Alubijid", name: "Brgy. Taparak", lat: 8.5050, lng: 124.4650 },
+      { id: "alu_tugasnon", city: "Alubijid", name: "Brgy. Tugasnon", lat: 8.5260, lng: 124.4910 },
+      { id: "alu_tula", city: "Alubijid", name: "Brgy. Tula", lat: 8.4980, lng: 124.4580 },
+      { id: "lag_poblacion", city: "Laguindingan", name: "Brgy. Poblacion", lat: 8.5835, lng: 124.4675 },
+      { id: "lag_moog", city: "Laguindingan", name: "Brgy. Moog", lat: 8.6040, lng: 124.4610 },
+      { id: "lag_kibaghot", city: "Laguindingan", name: "Brgy. Kibaghot", lat: 8.5950, lng: 124.4540 },
+      { id: "lag_aromahon", city: "Laguindingan", name: "Brgy. Aromahon", lat: 8.5890, lng: 124.4510 },
+      { id: "lag_gasi", city: "Laguindingan", name: "Brgy. Gasi", lat: 8.5760, lng: 124.4560 },
+      { id: "lag_lapad", city: "Laguindingan", name: "Brgy. Lapad", lat: 8.5880, lng: 124.4740 },
+      { id: "lag_liberty", city: "Laguindingan", name: "Brgy. Liberty", lat: 8.5680, lng: 124.4520 },
+      { id: "lag_mauswagon", city: "Laguindingan", name: "Brgy. Mauswagon", lat: 8.5785, lng: 124.4720 },
+      { id: "lag_sambulawan", city: "Laguindingan", name: "Brgy. Sambulawan", lat: 8.5610, lng: 124.4450 },
+      { id: "lag_sinai", city: "Laguindingan", name: "Brgy. Sinai", lat: 8.5980, lng: 124.4780 },
+      { id: "lag_tubajon", city: "Laguindingan", name: "Brgy. Tubajon", lat: 8.6150, lng: 124.4680 },
+      { id: "els_poblacion", city: "El Salvador City", name: "Brgy. Poblacion", lat: 8.5565, lng: 124.5235 },
+      { id: "els_molugan", city: "El Salvador City", name: "Brgy. Molugan", lat: 8.5380, lng: 124.5520 },
+      { id: "els_amoros", city: "El Salvador City", name: "Brgy. Amoros", lat: 8.5465, lng: 124.5390 },
+      { id: "els_taytay", city: "El Salvador City", name: "Brgy. Taytay", lat: 8.5635, lng: 124.5210 },
+      { id: "els_cogon", city: "El Salvador City", name: "Brgy. Cogon", lat: 8.5495, lng: 124.5160 },
+      { id: "els_kibonbon", city: "El Salvador City", name: "Brgy. Kibonbon", lat: 8.5280, lng: 124.5150 },
+      { id: "els_hinigdaan", city: "El Salvador City", name: "Brgy. Hinigdaan", lat: 8.5150, lng: 124.5380 },
+      { id: "els_bolisong", city: "El Salvador City", name: "Brgy. Bolisong", lat: 8.5340, lng: 124.5260 },
+      { id: "els_kalabaylabay", city: "El Salvador City", name: "Brgy. Kalabaylabay", lat: 8.5190, lng: 124.5240 },
+      { id: "els_himaya", city: "El Salvador City", name: "Brgy. Himaya", lat: 8.5260, lng: 124.5480 },
+      { id: "els_sambulawan", city: "El Salvador City", name: "Brgy. Sambulawan", lat: 8.5040, lng: 124.5290 },
+      { id: "els_ulaliman", city: "El Salvador City", name: "Brgy. Ulaliman", lat: 8.5605, lng: 124.5330 },
+      { id: "els_quibonbon", city: "El Salvador City", name: "Brgy. Quibonbon", lat: 8.5390, lng: 124.5040 },
+      { id: "els_san_francisco", city: "El Salvador City", name: "Brgy. San Francisco de Asis", lat: 8.5080, lng: 124.5140 },
+      { id: "opol_poblacion", city: "Opol", name: "Brgy. Poblacion", lat: 8.5165, lng: 124.5735 },
+      { id: "opol_barra", city: "Opol", name: "Brgy. Barra", lat: 8.5075, lng: 124.5985 },
+      { id: "opol_igpit", city: "Opol", name: "Brgy. Igpit", lat: 8.5068, lng: 124.5860 },
+      { id: "opol_taboc", city: "Opol", name: "Brgy. Taboc", lat: 8.5125, lng: 124.5842 },
+      { id: "opol_bonbon", city: "Opol", name: "Brgy. Bonbon", lat: 8.5192, lng: 124.5665 },
+      { id: "opol_luyong_bonbon", city: "Opol", name: "Brgy. Luyong Bonbon", lat: 8.5025, lng: 124.5765 },
+      { id: "opol_malanang", city: "Opol", name: "Brgy. Malanang", lat: 8.4885, lng: 124.5645 },
+      { id: "opol_patag", city: "Opol", name: "Brgy. Patag", lat: 8.5245, lng: 124.5585 },
+      { id: "opol_awang", city: "Opol", name: "Brgy. Awang", lat: 8.4725, lng: 124.5520 },
+      { id: "opol_bagocboc", city: "Opol", name: "Brgy. Bagocboc", lat: 8.4250, lng: 124.5310 },
+      { id: "opol_cauyunan", city: "Opol", name: "Brgy. Cauyunan", lat: 8.4480, lng: 124.5420 },
+      { id: "opol_limonda", city: "Opol", name: "Brgy. Limonda", lat: 8.3950, lng: 124.5150 },
+      { id: "opol_nangcaon", city: "Opol", name: "Brgy. Nangcaon", lat: 8.4120, lng: 124.5250 },
+      { id: "opol_tingalan", city: "Opol", name: "Brgy. Tingalan", lat: 8.3820, lng: 124.5080 }
+    ];
+
+    const DEFAULT_FARE_CONFIG = {
+      baseFare: 20,
+      ratePerKm: 10,
+      timeRatePerMin: 1
+    };
+    const SINALOC_ESTIMATE_FARE = 50;
+    const ROAD_FACTOR = 1.28;
+
+    const STORAGE_KEY_ACCOUNTS = "habal_misor_accounts_v1";
+    const STORAGE_KEY_PASSENGER_SESSION = "habal_misor_passenger_session_v1";
+    const STORAGE_KEY_BOOKINGS = "habal_misor_bookings_v6";
+    const STORAGE_KEY_FEEDBACKS = "habal_misor_feedbacks_v1";
+    const STORAGE_KEY_ACTIVE_PASSENGER_ID = "habal_misor_passenger_active_id_v6";
+    const STORAGE_KEY_FARE_CONFIG = "habal_misor_fare_config_v1";
+    const CHANNEL_NAME = "habal_misor_realtime_channel_v6";
+
+      const HABAL_FIREBASE_CONFIG = {
+        apiKey: "AIzaSyDC8Ey7XtI73aohMoU00RMHBluJqCdmWH8",
+        authDomain: "habal-habal-fd05e.firebaseapp.com",
+        projectId: "habal-habal-fd05e",
+        storageBucket: "habal-habal-fd05e.firebasestorage.app",
+        messagingSenderId: "885630063544",
+        appId: "1:885630063544:web:c13dc682494093dcd7354d",
+        measurementId: "G-0LEYZ8MXW6"
+      };
+      if (typeof window.__firebase_config === "undefined" || !window.__firebase_config) {
+        window.__firebase_config = JSON.stringify(HABAL_FIREBASE_CONFIG);
+      }
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'habal-misor-free';
+    let db = null;
+    let auth = null;
+    let currentUser = null;
+    let isFirebaseLive = false;
+    let realtimeChannel = null;
+
+    let fareConfig = loadFareConfig();
+    let soundEnabled = true;
+    let audioCtx = null;
+
+    let currentPassengerAccount = null;
+    let serviceMode = "ride"; // "ride" | "sugo"
+    let selectedDropoffId = "els_sinaloc";
+    let customPickupCoords = null;
+    let gpsAccuracyMeters = null;
+    let liveGpsWatchId = null;
+    let lastLiveGpsPushMs = 0;
+
+    let modalCityFilter = "ALL";
+    let selectedFeedbackType = "Suggestion";
+
+    let allBookings = [];
+    let passengerActiveBookingId = localStorage.getItem(STORAGE_KEY_ACTIVE_PASSENGER_ID) || null;
+    let lastKnownStatus = null;
+    let lastKnownMeterStarted = false;
+
+    let bookingPreviewMap = null;
+    let passengerLiveMap = null;
+    const routeCache = new Map();
+
+    function loadFareConfig() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_FARE_CONFIG);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return {
+            baseFare: Math.max(0, Number(parsed.baseFare ?? DEFAULT_FARE_CONFIG.baseFare)),
+            ratePerKm: Math.max(0, Number(parsed.ratePerKm ?? DEFAULT_FARE_CONFIG.ratePerKm)),
+            timeRatePerMin: Math.max(0, Number(parsed.timeRatePerMin ?? DEFAULT_FARE_CONFIG.timeRatePerMin))
+          };
+        }
+      } catch (e) {}
+      return { ...DEFAULT_FARE_CONFIG };
+    }
+
+    // Service Mode Switcher ("ride" or "sugo")
+    window.setServiceMode = function (mode) {
+      serviceMode = mode === "sugo" ? "sugo" : "ride";
+      const isSugo = serviceMode === "sugo";
+
+      const rideBtn = document.getElementById("btn-mode-ride");
+      const sugoBtn = document.getElementById("btn-mode-sugo");
+      const sugoBox = document.getElementById("sugo-fields-box");
+      const dropoffBarangaySection = document.getElementById("dropoff-barangay-section");
+      const gpsSectionLabel = document.getElementById("gps-section-label");
+      const gpsSectionDot = document.getElementById("gps-section-dot");
+      const cardTitle = document.getElementById("booking-card-title");
+      const cardSubtitle = document.getElementById("booking-card-subtitle");
+      const estTitle = document.getElementById("estimate-fare-title");
+      const submitIcon = document.getElementById("btn-submit-icon");
+      const submitLabel = document.getElementById("btn-submit-label");
+
+      if (isSugo) {
+        rideBtn.className = "py-2.5 px-3 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5 transition";
+        sugoBtn.className = "py-2.5 px-3 rounded-lg text-xs font-extrabold bg-emerald-600 text-white shadow-xs flex items-center justify-center gap-1.5 transition";
+        sugoBox.classList.remove("hidden");
+        dropoffBarangaySection.classList.add("hidden");
+        gpsSectionLabel.textContent = "Drop-off / Customer GPS Location *";
+        gpsSectionDot.className = "w-2.5 h-2.5 rounded-full bg-amber-500";
+        cardTitle.textContent = "Sugo";
+        cardSubtitle.textContent = "Isulat asa paliton ug unsa ang papalit; GPS ang drop-off sa customer.";
+        estTitle.textContent = "Estimate Sugo Fee";
+        submitIcon.className = "fa-solid fa-bag-shopping";
+        submitLabel.textContent = "Send Sugo Now";
+      } else {
+        sugoBtn.className = "py-2.5 px-3 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center justify-center gap-1.5 transition";
+        rideBtn.className = "py-2.5 px-3 rounded-lg text-xs font-extrabold bg-emerald-600 text-white shadow-xs flex items-center justify-center gap-1.5 transition";
+        sugoBox.classList.add("hidden");
+        dropoffBarangaySection.classList.remove("hidden");
+        gpsSectionLabel.textContent = "Pickup Location *";
+        gpsSectionDot.className = "w-2.5 h-2.5 rounded-full bg-emerald-600";
+        cardTitle.textContent = "Book a Habal-Habal";
+        cardSubtitle.textContent = "Meter runs on Pick Up (Distance + Running Time).";
+        estTitle.textContent = "Estimate Fare";
+        submitIcon.className = "fa-solid fa-motorcycle";
+        submitLabel.textContent = "Book Habal-Habal Now";
+      }
+
+      if (currentPassengerAccount) {
+        updateSelectedRouteUI();
+      }
+    };
+
+    // Account Management (Passenger)
+    function loadAccounts() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_ACCOUNTS);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveAccounts(list) {
+      try {
+        localStorage.setItem(STORAGE_KEY_ACCOUNTS, JSON.stringify(list));
+      } catch (e) {}
+    }
+
+    function normalizePhone(p) {
+      return String(p || "").replace(/\D/g, "");
+    }
+
+    window.switchAuthMode = function (mode) {
+      const loginForm = document.getElementById("passenger-login-form");
+      const regForm = document.getElementById("passenger-register-form");
+      const loginTab = document.getElementById("tab-auth-login");
+      const regTab = document.getElementById("tab-auth-register");
+      const heading = document.getElementById("auth-heading");
+
+      if (mode === "register") {
+        loginForm.classList.add("hidden");
+        regForm.classList.remove("hidden");
+        loginTab.className = "py-2 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition";
+        regTab.className = "py-2 rounded-lg text-xs font-extrabold bg-white text-emerald-700 shadow-xs transition";
+        heading.textContent = "Create Passenger Account";
+      } else {
+        regForm.classList.add("hidden");
+        loginForm.classList.remove("hidden");
+        regTab.className = "py-2 rounded-lg text-xs font-bold text-slate-600 hover:text-slate-900 transition";
+        loginTab.className = "py-2 rounded-lg text-xs font-extrabold bg-white text-emerald-700 shadow-xs transition";
+        heading.textContent = "Passenger Log In";
+      }
+    };
+
+    window.handlePassengerRegister = function (e) {
+      e.preventDefault();
+      playTapSound();
+
+      const name = document.getElementById("reg-name").value.trim();
+      const phoneRaw = document.getElementById("reg-phone").value.trim();
+      const password = document.getElementById("reg-password").value;
+      const phoneKey = normalizePhone(phoneRaw);
+
+      if (!name || phoneKey.length < 7 || password.length < 4) {
+        showToast("Enter valid name, mobile number, and password (4+ chars).", "error");
+        return;
+      }
+
+      const accounts = loadAccounts();
+      const exists = accounts.find((a) => a.role === "passenger" && normalizePhone(a.phone) === phoneKey);
+      if (exists) {
+        showToast("Mobile number already registered. Please Log In.", "warning");
+        switchAuthMode("login");
+        document.getElementById("login-phone").value = phoneRaw;
+        return;
+      }
+
+      const newAcc = {
+        id: "PAX-" + Date.now(),
+        role: "passenger",
+        name,
+        phone: phoneRaw,
+        password
+      };
+      accounts.push(newAcc);
+      saveAccounts(accounts);
+      applyPassengerSession(newAcc);
+      playChimeSound();
+      showToast("Passenger account created!", "success");
+    };
+
+    window.handlePassengerLogin = function (e) {
+      e.preventDefault();
+      playTapSound();
+
+      const phoneKey = normalizePhone(document.getElementById("login-phone").value.trim());
+      const password = document.getElementById("login-password").value;
+
+      const accounts = loadAccounts();
+      const match = accounts.find(
+        (a) => a.role === "passenger" && normalizePhone(a.phone) === phoneKey && a.password === password
+      );
+
+      if (!match) {
+        showToast("Invalid mobile number or password. Create an account if new.", "error");
+        return;
+      }
+
+      applyPassengerSession(match);
+      playChimeSound();
+      showToast(`Welcome back, ${match.name}!`, "success");
+    };
+
+    window.logoutPassengerAccount = function () {
+      currentPassengerAccount = null;
+      localStorage.removeItem(STORAGE_KEY_PASSENGER_SESSION);
+      syncAuthGateUI();
+      showToast("Logged out.", "info");
+    };
+
+    function applyPassengerSession(acc) {
+      currentPassengerAccount = acc;
+      try {
+        localStorage.setItem(STORAGE_KEY_PASSENGER_SESSION, JSON.stringify(acc));
+      } catch (e) {}
+      syncAuthGateUI();
+      updateSelectedRouteUI();
+      triggerLiveGPS(false);
+      renderPassengerView();
+    }
+
+    function syncAuthGateUI() {
+      const authCard = document.getElementById("passenger-auth-card");
+      const appContent = document.getElementById("passenger-app-content");
+      const logoutBtn = document.getElementById("btn-logout-passenger");
+      const subtitle = document.getElementById("passenger-account-subtitle");
+
+      if (currentPassengerAccount) {
+        authCard.classList.add("hidden");
+        appContent.classList.remove("hidden");
+        logoutBtn.classList.remove("hidden");
+        subtitle.textContent = `${currentPassengerAccount.name} • ${currentPassengerAccount.phone}`;
+      } else {
+        authCard.classList.remove("hidden");
+        appContent.classList.add("hidden");
+        logoutBtn.classList.add("hidden");
+        subtitle.textContent = "Log in or Create Account required";
+      }
+    }
+
+    // Sound Engine
+    function getAudioContext() {
+      if (!soundEnabled) return null;
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) audioCtx = new AudioContextClass();
+      }
+      if (audioCtx && audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
+      return audioCtx;
+    }
+
+    function playTone(freq, durationSec, type = "triangle", gainPeak = 0.75, delaySec = 0) {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const now = ctx.currentTime + delaySec;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.exponentialRampToValueAtTime(gainPeak, now + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + durationSec);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + durationSec + 0.02);
+    }
+
+    window.playTapSound = function () {
+      if (!soundEnabled) return;
+      playTone(760, 0.075, "triangle", 0.5, 0);
+      playTone(1040, 0.06, "sine", 0.3, 0.035);
+    };
+
+    function playChimeSound() {
+      if (!soundEnabled) return;
+      playTone(659.25, 0.14, "triangle", 0.85, 0);
+      playTone(880.0, 0.16, "triangle", 0.9, 0.12);
+      playTone(1318.5, 0.26, "sine", 0.95, 0.24);
+    }
+
+    window.toggleSoundSystem = function () {
+      soundEnabled = !soundEnabled;
+      const icon = document.getElementById("sound-icon");
+      const label = document.getElementById("sound-label");
+      const btn = document.getElementById("btn-sound-toggle");
+
+      if (soundEnabled) {
+        icon.className = "fa-solid fa-volume-high";
+        label.textContent = "Sound ON";
+        btn.className = "min-h-[34px] px-2.5 rounded-full bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 text-[11px] font-bold flex items-center gap-1 transition";
+        playChimeSound();
+      } else {
+        icon.className = "fa-solid fa-volume-xmark";
+        label.textContent = "Muted";
+        btn.className = "min-h-[34px] px-2.5 rounded-full bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-600 text-[11px] font-bold flex items-center gap-1 transition";
+      }
+    };
+
+    // Feedback Controls (Requires Logged-In Account)
+    window.openFeedbackModal = function (type = "Suggestion") {
+      if (!currentPassengerAccount) {
+        showToast("Please Log In or Create an Account first.", "warning");
+        return;
+      }
+      setFeedbackType(type);
+      document.getElementById("fb-name").value = currentPassengerAccount.name;
+      document.getElementById("fb-contact").value = currentPassengerAccount.phone;
+      document.getElementById("feedback-modal").classList.remove("hidden");
+      setTimeout(() => document.getElementById("fb-message").focus(), 100);
+    };
+
+    window.closeFeedbackModal = function () {
+      document.getElementById("feedback-modal").classList.add("hidden");
+    };
+
+    window.setFeedbackType = function (type) {
+      selectedFeedbackType = type;
+      const labelEl = document.getElementById("fb-message-label");
+      const textareaEl = document.getElementById("fb-message");
+
+      if (type === "Report") {
+        labelEl.textContent = "Describe the Issue / Report *";
+        textareaEl.placeholder = "Tell us what happened (e.g. rider plate number, fare issue, or app error)...";
+      } else if (type === "Comment") {
+        labelEl.textContent = "Your Comment *";
+        textareaEl.placeholder = "Share your ride experience or comment with us...";
+      } else {
+        labelEl.textContent = "Your Suggestion *";
+        textareaEl.placeholder = "Write your suggestion to improve our Habal-Habal service...";
+      }
+
+      document.querySelectorAll(".fb-type-btn").forEach((btn) => {
+        const btnType = btn.getAttribute("data-fb-type");
+        const isActive = btnType === type;
+        if (!isActive) {
+          btn.className = "fb-type-btn py-2.5 px-2 rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-bold flex flex-col items-center gap-1 transition";
+        } else if (type === "Report") {
+          btn.className = "fb-type-btn py-2.5 px-2 rounded-xl border-2 border-red-600 bg-red-50 text-red-700 text-xs font-extrabold flex flex-col items-center gap-1 transition";
+        } else if (type === "Comment") {
+          btn.className = "fb-type-btn py-2.5 px-2 rounded-xl border-2 border-amber-500 bg-amber-50 text-amber-800 text-xs font-extrabold flex flex-col items-center gap-1 transition";
+        } else {
+          btn.className = "fb-type-btn py-2.5 px-2 rounded-xl border-2 border-emerald-600 bg-emerald-50 text-emerald-800 text-xs font-extrabold flex flex-col items-center gap-1 transition";
+        }
+      });
+    };
+
+    window.submitPassengerFeedback = async function (e) {
+      e.preventDefault();
+      playTapSound();
+      if (!currentPassengerAccount) return;
+
+      const senderName = currentPassengerAccount.name;
+      const contact = document.getElementById("fb-contact").value.trim() || currentPassengerAccount.phone;
+      const message = document.getElementById("fb-message").value.trim();
+
+      if (!message) {
+        showToast("Please enter your message before sending.", "error");
+        return;
+      }
+
+      const btn = document.getElementById("btn-submit-feedback");
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Sending...</span>`;
+
+      const feedbackPayload = {
+        type: selectedFeedbackType,
+        senderId: currentPassengerAccount.id,
+        senderName,
+        contact,
+        message,
+        activeBookingId: passengerActiveBookingId || null,
+        status: "unread",
+        createdAtMs: Date.now()
+      };
+
+      try {
+        if (isFirebaseLive && currentUser) {
+          const fbCol = collection(db, "artifacts", appId, "public", "data", "habal_feedbacks");
+          await addDoc(fbCol, { ...feedbackPayload, createdAt: serverTimestamp() });
+        } else {
+          let existing = [];
+          try {
+            existing = JSON.parse(localStorage.getItem(STORAGE_KEY_FEEDBACKS) || "[]");
+            if (!Array.isArray(existing)) existing = [];
+          } catch (err) {
+            existing = [];
+          }
+          existing.unshift({ id: "FB-" + Date.now(), ...feedbackPayload });
+          localStorage.setItem(STORAGE_KEY_FEEDBACKS, JSON.stringify(existing));
+          if (realtimeChannel) {
+            realtimeChannel.postMessage({ type: "FEEDBACK_UPDATED", at: Date.now() });
+          }
+        }
+
+        document.getElementById("fb-message").value = "";
+        closeFeedbackModal();
+        playChimeSound();
+        showToast(`${selectedFeedbackType} sent to Admin!`, "success");
+      } catch (err) {
+        showToast("Unable to send right now. Please try again.", "error");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class="fa-solid fa-paper-plane"></i><span>Send to Admin</span>`;
+      }
+    };
+
+    // Fare & Meter Helpers (Synced with Admin Fare Setup)
+    function isSinalocLocation(loc) {
+      if (!loc) return false;
+      const hay = `${loc.id || ""} ${loc.name || ""}`.toLowerCase();
+      return hay.includes("sinaloc");
+    }
+
+    function computeEstimateFare(loc, distanceKm) {
+      const baseFare = Math.max(0, Number(fareConfig.baseFare ?? DEFAULT_FARE_CONFIG.baseFare));
+      const ratePerKm = Math.max(0, Number(fareConfig.ratePerKm ?? DEFAULT_FARE_CONFIG.ratePerKm));
+      if (isSinalocLocation(loc)) return SINALOC_ESTIMATE_FARE;
+      return Math.max(baseFare, Math.round(baseFare + (distanceKm || 1) * ratePerKm));
+    }
+
+    function computeLiveMeterBreakdown(booking) {
+      const baseFare = Math.max(0, Number(fareConfig.baseFare ?? DEFAULT_FARE_CONFIG.baseFare));
+      const ratePerKm = Math.max(0, Number(fareConfig.ratePerKm ?? DEFAULT_FARE_CONFIG.ratePerKm));
+      const timeRatePerMin = Math.max(0, Number(fareConfig.timeRatePerMin ?? DEFAULT_FARE_CONFIG.timeRatePerMin));
+
+      const mDist = Math.max(0, Number(booking.meterDistanceKm || 0));
+      const elapsedMs = booking.meterStartedAtMs ? Math.max(0, Date.now() - booking.meterStartedAtMs) : 0;
+      const elapsedMins = Math.floor(elapsedMs / 60000);
+      const distanceCharge = Math.round(mDist * ratePerKm);
+      const timeCharge = Math.round(elapsedMins * timeRatePerMin);
+      const exactTotal = Math.round(baseFare + distanceCharge + timeCharge);
+      return { baseFare, mDist, elapsedMs, distanceCharge, timeCharge, finalFare: exactTotal };
+    }
+
+    async function fetchHighwayRoute(fromCoords, toCoords) {
+      if (!fromCoords || !toCoords) return null;
+      const key = `${fromCoords.lat.toFixed(5)},${fromCoords.lng.toFixed(5)}->${toCoords.lat.toFixed(5)},${toCoords.lng.toFixed(5)}`;
+      if (routeCache.has(key)) return routeCache.get(key);
+      try {
+        const url = `https://router.project-osrm.org/route/v1/driving/${fromCoords.lng},${fromCoords.lat};${toCoords.lng},${toCoords.lat}?overview=full&geometries=geojson`;
+        const resp = await fetch(url, { signal: AbortSignal.timeout(3500) });
+        if (!resp.ok) throw new Error("OSRM failed");
+        const data = await resp.json();
+        const route = data && data.routes && data.routes[0];
+        if (!route || !route.geometry || !Array.isArray(route.geometry.coordinates)) throw new Error("No route");
+        const latLngs = route.geometry.coordinates.map(([lng, lat]) => [lat, lng]);
+        const distanceKm = Math.max(1.0, Number((route.distance / 1000).toFixed(1)));
+        const result = { latLngs, distanceKm, isHighway: true };
+        routeCache.set(key, result);
+        return result;
+      } catch (e) {
+        const straightKm = computeHaversineKm(fromCoords.lat, fromCoords.lng, toCoords.lat, toCoords.lng);
+        return {
+          latLngs: [[fromCoords.lat, fromCoords.lng], [toCoords.lat, toCoords.lng]],
+          distanceKm: Math.max(1.0, Number((straightKm * ROAD_FACTOR).toFixed(1))),
+          isHighway: false
+        };
+      }
+    }
+
+    function createMotoDivIcon(labelText = "Rider") {
+      return L.divIcon({
+        className: "",
+        html: `<div class="moto-map-marker" title="${escapeHTML(labelText)}"><i class="fa-solid fa-motorcycle"></i></div>`,
+        iconSize: [38, 38],
+        iconAnchor: [19, 19]
+      });
+    }
+
+    function createPickupPinIcon() {
+      return L.divIcon({
+        className: "",
+        html: `<div class="pin-pickup-marker">P</div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+    }
+
+    function createDropoffPinIcon() {
+      return L.divIcon({
+        className: "",
+        html: `<div class="pin-dropoff-marker">D</div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      });
+    }
+
+    function addEsriTileLayer(map) {
+      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
+        maxZoom: 19,
+        attribution: "Tiles &copy; Esri"
+      }).addTo(map);
+    }
+
+    function initMapsIfNeeded() {
+      if (typeof L === "undefined" || !currentPassengerAccount) return;
+      if (!bookingPreviewMap && document.getElementById("booking-preview-map")) {
+        bookingPreviewMap = L.map("booking-preview-map", { zoomControl: true }).setView([8.5615, 124.5085], 13);
+        addEsriTileLayer(bookingPreviewMap);
+      }
+      if (!passengerLiveMap && document.getElementById("passenger-live-map")) {
+        passengerLiveMap = L.map("passenger-live-map", { zoomControl: true }).setView([8.5615, 124.5085], 13);
+        addEsriTileLayer(passengerLiveMap);
+      }
+    }
+
+    window.updateBookingPreviewMap = async function () {
+      initMapsIfNeeded();
+      if (!bookingPreviewMap) return;
+      if (bookingPreviewMap._customLayerGroup) {
+        bookingPreviewMap._customLayerGroup.clearLayers();
+      } else {
+        bookingPreviewMap._customLayerGroup = L.layerGroup().addTo(bookingPreviewMap);
+      }
+      const group = bookingPreviewMap._customLayerGroup;
+
+      if (serviceMode === "sugo") {
+        const captionEl = document.getElementById("preview-route-caption");
+        if (customPickupCoords) {
+          const dCoords = { lat: customPickupCoords.lat, lng: customPickupCoords.lng };
+          if (captionEl) captionEl.textContent = "Customer GPS Drop-off Preview";
+          L.marker([dCoords.lat, dCoords.lng], { icon: createDropoffPinIcon() }).bindPopup("Customer Drop-off (Live GPS)").addTo(group);
+          bookingPreviewMap.setView([dCoords.lat, dCoords.lng], 15);
+        } else {
+          if (captionEl) captionEl.textContent = "Enable GPS for Customer Drop-off";
+          bookingPreviewMap.setView([8.5615, 124.5085], 13);
+        }
+        return;
+      }
+
+      const dLoc = LOCATIONS.find((l) => l.id === selectedDropoffId) || LOCATIONS[0];
+      const dCoords = { lat: dLoc.lat, lng: dLoc.lng };
+      L.marker([dCoords.lat, dCoords.lng], { icon: createDropoffPinIcon() }).bindPopup(`Drop-off: ${escapeHTML(dLoc.name)}`).addTo(group);
+
+      if (customPickupCoords) {
+        const pCoords = { lat: customPickupCoords.lat, lng: customPickupCoords.lng };
+        const routeData = await fetchHighwayRoute(pCoords, dCoords);
+        const captionEl = document.getElementById("preview-route-caption");
+        if (captionEl && routeData) {
+          captionEl.textContent = routeData.isHighway ? "Highway Route Preview" : "Estimated Road Route";
+        }
+        L.marker([pCoords.lat, pCoords.lng], { icon: createPickupPinIcon() }).bindPopup("Pickup (Live GPS)").addTo(group);
+        if (routeData && routeData.latLngs.length > 0) {
+          L.polyline(routeData.latLngs, { color: "#059669", weight: 4.5, opacity: 0.92 }).addTo(group);
+        }
+        bookingPreviewMap.fitBounds(L.latLngBounds([[pCoords.lat, pCoords.lng], [dCoords.lat, dCoords.lng]]), { padding: [26, 26], maxZoom: 15 });
+      } else {
+        const captionEl = document.getElementById("preview-route-caption");
+        if (captionEl) captionEl.textContent = "Barangay Preview (Enable GPS for route)";
+        bookingPreviewMap.setView([dCoords.lat, dCoords.lng], 14);
+      }
+    };
+
+    async function updatePassengerTrackerMap(booking) {
+      initMapsIfNeeded();
+      if (!passengerLiveMap || !booking) return;
+      passengerLiveMap.invalidateSize();
+      if (passengerLiveMap._customLayerGroup) {
+        passengerLiveMap._customLayerGroup.clearLayers();
+      } else {
+        passengerLiveMap._customLayerGroup = L.layerGroup().addTo(passengerLiveMap);
+      }
+      const group = passengerLiveMap._customLayerGroup;
+      const isSugo = booking.serviceType === "sugo";
+      const dCoords = booking.dropoffCoords || booking.pickupCoords || { lat: 8.5615, lng: 124.5085 };
+      const points = [];
+
+      if (isSugo) {
+        L.marker([dCoords.lat, dCoords.lng], { icon: createDropoffPinIcon() }).bindPopup(`Customer Drop-off: ${escapeHTML(booking.dropoffName)}`).addTo(group);
+        points.push([dCoords.lat, dCoords.lng]);
+      } else {
+        const pCoords = booking.pickupCoords || { lat: 8.5668, lng: 124.4765 };
+        L.marker([pCoords.lat, pCoords.lng], { icon: createPickupPinIcon() }).bindPopup(`Pickup: ${escapeHTML(booking.pickupName)}`).addTo(group);
+        L.marker([dCoords.lat, dCoords.lng], { icon: createDropoffPinIcon() }).bindPopup(`Drop-off: ${escapeHTML(booking.dropoffName)}`).addTo(group);
+        points.push([pCoords.lat, pCoords.lng], [dCoords.lat, dCoords.lng]);
+        const tripRoute = await fetchHighwayRoute(pCoords, dCoords);
+        if (tripRoute && tripRoute.latLngs.length > 0) {
+          L.polyline(tripRoute.latLngs, { color: "#059669", weight: 4.5, opacity: 0.92 }).addTo(group);
+        }
+      }
+
+      const etaEl = document.getElementById("passenger-rider-eta");
+
+      if (booking.status === "accepted" && booking.riderCoords) {
+        const riderCoords = booking.riderCoords;
+        points.push([riderCoords.lat, riderCoords.lng]);
+        const targetPos = isSugo ? dCoords : (booking.pickupCoords || dCoords);
+        const riderRoute = await fetchHighwayRoute(riderCoords, targetPos);
+        if (riderRoute && riderRoute.latLngs.length > 0) {
+          L.polyline(riderRoute.latLngs, { color: "#0284c7", weight: 3.5, dashArray: "6, 6" }).addTo(group);
+        }
+        L.marker([riderCoords.lat, riderCoords.lng], { icon: createMotoDivIcon(booking.riderName || "Rider") }).addTo(group);
+        if (booking.meterStartedAtMs) {
+          etaEl.textContent = "Meter Running";
+        } else {
+          const distKm = riderRoute ? riderRoute.distanceKm : computeHaversineKm(riderCoords.lat, riderCoords.lng, targetPos.lat, targetPos.lng) * ROAD_FACTOR;
+          const mins = Math.max(1, Math.round((distKm / 28) * 60));
+          etaEl.textContent = `Rider ~${mins} min away`;
+        }
+      } else if (booking.status === "accepted") {
+        etaEl.textContent = "Rider Assigned";
+      } else {
+        etaEl.textContent = "Searching nearby riders";
+      }
+
+      if (points.length >= 2) {
+        passengerLiveMap.fitBounds(L.latLngBounds(points), { padding: [26, 26], maxZoom: 15 });
+      } else if (points.length === 1) {
+        passengerLiveMap.setView(points[0], 15);
+      }
+    }
+
+    function initBroadcastChannel() {
+      if ("BroadcastChannel" in window) {
+        realtimeChannel = new BroadcastChannel(CHANNEL_NAME);
+        realtimeChannel.onmessage = (event) => {
+          if (event.data && event.data.type === "FARE_CONFIG_UPDATED") {
+            fareConfig = loadFareConfig();
+            updateSelectedRouteUI();
+            renderPassengerView();
+            showToast(`Rates updated: Base ₱${fareConfig.baseFare}, ₱${fareConfig.ratePerKm}/km, ₱${fareConfig.timeRatePerMin}/min`, "info");
+          } else if (!isFirebaseLive && event.data && event.data.type === "BOOKINGS_UPDATED") {
+            allBookings = loadLocalBookings();
+            renderPassengerView();
+          }
+        };
+      }
+    }
+
+    function broadcastLocalUpdate() {
+      try {
+        localStorage.setItem(STORAGE_KEY_BOOKINGS, JSON.stringify(allBookings));
+      } catch (e) {}
+      if (realtimeChannel) {
+        realtimeChannel.postMessage({ type: "BOOKINGS_UPDATED", at: Date.now() });
+      }
+    }
+
+    function loadLocalBookings() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_BOOKINGS);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) return parsed;
+        }
+      } catch (e) {}
+      return [];
+    }
+
+    window.addEventListener("storage", (event) => {
+      if (event.key === STORAGE_KEY_FARE_CONFIG) {
+        fareConfig = loadFareConfig();
+        updateSelectedRouteUI();
+        renderPassengerView();
+      } else if (event.key === STORAGE_KEY_BOOKINGS && !isFirebaseLive) {
+        allBookings = loadLocalBookings();
+        renderPassengerView();
+      }
+    });
+
+    async function initStorageEngine() {
+      try {
+        if (typeof __firebase_config === "undefined" || !__firebase_config) throw new Error("Local mode");
+        const config = JSON.parse(__firebase_config);
+        if (!config || !config.apiKey) throw new Error("Missing API key");
+        const app = initializeApp(config);
+        auth = getAuth(app);
+        db = getFirestore(app);
+        if (typeof __initial_auth_token !== "undefined" && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+        currentUser = auth.currentUser;
+        if (!currentUser) throw new Error("No auth user");
+        isFirebaseLive = true;
+        const bookingsCol = collection(db, "artifacts", appId, "public", "data", "habal_bookings");
+        onSnapshot(bookingsCol, (snap) => {
+          const items = [];
+          snap.forEach((docSnap) => items.push({ id: docSnap.id, ...docSnap.data() }));
+          items.sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0));
+          allBookings = items;
+          renderPassengerView();
+        }, () => fallbackToLocalSync());
+
+        const configDocRef = doc(db, "artifacts", appId, "public", "data", "habal_config", "fare_rates");
+        onSnapshot(configDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const d = docSnap.data();
+            fareConfig = {
+              baseFare: Math.max(0, Number(d.baseFare ?? DEFAULT_FARE_CONFIG.baseFare)),
+              ratePerKm: Math.max(0, Number(d.ratePerKm ?? DEFAULT_FARE_CONFIG.ratePerKm)),
+              timeRatePerMin: Math.max(0, Number(d.timeRatePerMin ?? DEFAULT_FARE_CONFIG.timeRatePerMin))
+            };
+            try { localStorage.setItem(STORAGE_KEY_FARE_CONFIG, JSON.stringify(fareConfig)); } catch (e) {}
+            updateSelectedRouteUI();
+            renderPassengerView();
+          }
+        });
+      } catch (e) {
+        fallbackToLocalSync();
+      }
+    }
+
+    function fallbackToLocalSync() {
+      isFirebaseLive = false;
+      allBookings = loadLocalBookings();
+      renderPassengerView();
+    }
+
+    function showToast(message, type = "info") {
+      const container = document.getElementById("toast-container");
+      const el = document.createElement("div");
+      const styles = {
+        success: "bg-emerald-700 text-white border-emerald-600",
+        error: "bg-red-600 text-white border-red-500",
+        warning: "bg-amber-600 text-white border-amber-500",
+        info: "bg-slate-900 text-white border-slate-700"
+      };
+      el.className = `pointer-events-auto flex items-center gap-2.5 px-4 py-3 rounded-xl border shadow-lg text-xs font-bold ${styles[type] || styles.info}`;
+      el.textContent = message;
+      container.appendChild(el);
+      setTimeout(() => el.remove(), 3000);
+    }
+
+    function askConfirm(title, message) {
+      return new Promise((resolve) => {
+        const modal = document.getElementById("confirm-modal");
+        document.getElementById("confirm-title").textContent = title;
+        document.getElementById("confirm-message").textContent = message;
+        modal.classList.remove("hidden");
+        const okBtn = document.getElementById("confirm-ok-btn");
+        const cancelBtn = document.getElementById("confirm-cancel-btn");
+        const done = (val) => {
+          modal.classList.add("hidden");
+          okBtn.onclick = null;
+          cancelBtn.onclick = null;
+          resolve(val);
+        };
+        okBtn.onclick = () => done(true);
+        cancelBtn.onclick = () => done(false);
+      });
+    }
+
+    function computeHaversineKm(lat1, lng1, lat2, lng2) {
+      const toRad = (deg) => (deg * Math.PI) / 180;
+      const R = 6371;
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+    }
+
+    function findNearestLocation(lat, lng) {
+      let nearest = LOCATIONS[0];
+      let minDist = Infinity;
+      LOCATIONS.forEach((loc) => {
+        const d = computeHaversineKm(lat, lng, loc.lat, loc.lng);
+        if (d < minDist) {
+          minDist = d;
+          nearest = loc;
+        }
+      });
+      return nearest;
+    }
+
+    async function updateSelectedRouteUI() {
+      if (!currentPassengerAccount) return null;
+      fareConfig = loadFareConfig();
+      const baseFare = Math.max(0, Number(fareConfig.baseFare ?? DEFAULT_FARE_CONFIG.baseFare));
+      const ratePerKm = Math.max(0, Number(fareConfig.ratePerKm ?? DEFAULT_FARE_CONFIG.ratePerKm));
+      const timeRatePerMin = Math.max(0, Number(fareConfig.timeRatePerMin ?? DEFAULT_FARE_CONFIG.timeRatePerMin));
+
+      const isSugo = serviceMode === "sugo";
+      const dLoc = LOCATIONS.find((l) => l.id === selectedDropoffId) || LOCATIONS[0];
+      document.getElementById("dropoff-display-city").textContent = `${dLoc.city} • Drop-off Barangay`;
+      document.getElementById("dropoff-display-name").textContent = dLoc.name;
+
+      const badge = document.getElementById("pickup-set-badge");
+      const cityEl = document.getElementById("pickup-display-city");
+      const nameEl = document.getElementById("pickup-display-name");
+      const ruleEl = document.getElementById("summary-fare-rule");
+
+      if (isSugo) {
+        ruleEl.textContent = `₱${ratePerKm}/km + ₱${timeRatePerMin}/min time`;
+        if (customPickupCoords) {
+          const nearest = findNearestLocation(customPickupCoords.lat, customPickupCoords.lng);
+          badge.textContent = "GPS Locked";
+          badge.className = "text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 whitespace-nowrap";
+          cityEl.textContent = `${nearest.city} • Customer Live GPS`;
+          nameEl.textContent = `${nearest.name} (${customPickupCoords.lat.toFixed(5)}, ${customPickupCoords.lng.toFixed(5)})`;
+
+          const estKm = Math.max(1.0, Number((computeHaversineKm(customPickupCoords.lat, customPickupCoords.lng, nearest.lat, nearest.lng) * ROAD_FACTOR + 1.5).toFixed(1)));
+          const fare = computeEstimateFare(nearest, estKm);
+          document.getElementById("summary-distance").textContent = `~${estKm} km`;
+          document.getElementById("summary-fare").textContent = `₱${fare}`;
+          await updateBookingPreviewMap();
+
+          return {
+            pickupLoc: nearest,
+            pickupCoords: { ...customPickupCoords },
+            dropoffLoc: nearest,
+            dropoffCoords: { ...customPickupCoords },
+            distance: estKm,
+            fare
+          };
+        } else {
+          badge.textContent = "GPS Required";
+          badge.className = "text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 whitespace-nowrap";
+          cityEl.textContent = "Customer GPS Required";
+          nameEl.textContent = "Tap 'Use My GPS' para mahibaw-an asa ka";
+          document.getElementById("summary-distance").textContent = "-- km";
+          document.getElementById("summary-fare").textContent = `₱${Math.round(baseFare + ratePerKm)}`;
+          await updateBookingPreviewMap();
+          return null;
+        }
+      }
+
+      const estWhenNoGps = computeEstimateFare(dLoc, 1.0);
+      ruleEl.textContent = isSinalocLocation(dLoc)
+        ? `Sinaloc ₱50 • +₱${timeRatePerMin}/min time`
+        : `₱${ratePerKm}/km + ₱${timeRatePerMin}/min time`;
+
+      if (customPickupCoords) {
+        const nearest = findNearestLocation(customPickupCoords.lat, customPickupCoords.lng);
+        badge.textContent = "GPS Locked";
+        badge.className = "text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 whitespace-nowrap";
+        cityEl.textContent = `${nearest.city} • Live GPS`;
+        nameEl.textContent = `${nearest.name} (${customPickupCoords.lat.toFixed(5)}, ${customPickupCoords.lng.toFixed(5)})`;
+
+        const routeData = await fetchHighwayRoute(customPickupCoords, { lat: dLoc.lat, lng: dLoc.lng });
+        const distanceKm = routeData ? routeData.distanceKm : Math.max(1.0, Number((computeHaversineKm(customPickupCoords.lat, customPickupCoords.lng, dLoc.lat, dLoc.lng) * ROAD_FACTOR).toFixed(1)));
+        const fare = computeEstimateFare(dLoc, distanceKm);
+
+        document.getElementById("summary-distance").textContent = `~${distanceKm} km`;
+        document.getElementById("summary-fare").textContent = `₱${fare}`;
+        await updateBookingPreviewMap();
+
+        return {
+          pickupLoc: nearest,
+          pickupCoords: { ...customPickupCoords },
+          dropoffLoc: dLoc,
+          dropoffCoords: { lat: dLoc.lat, lng: dLoc.lng },
+          distance: distanceKm,
+          fare
+        };
+      } else {
+        badge.textContent = "GPS Required";
+        badge.className = "text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 whitespace-nowrap";
+        cityEl.textContent = "Live GPS Required";
+        nameEl.textContent = "Tap 'Use My GPS' or allow Location permission";
+        document.getElementById("summary-distance").textContent = "-- km";
+        document.getElementById("summary-fare").textContent = `₱${estWhenNoGps}`;
+        await updateBookingPreviewMap();
+        return null;
+      }
+    }
+
+    window.openLocationModal = function () {
+      modalCityFilter = "ALL";
+      document.getElementById("location-search-input").value = "";
+      updateCityPillStyles();
+      renderLocationModalList();
+      document.getElementById("location-modal").classList.remove("hidden");
+      setTimeout(() => document.getElementById("location-search-input").focus(), 100);
+    };
+
+    window.closeLocationModal = function () {
+      document.getElementById("location-modal").classList.add("hidden");
+    };
+
+    window.setModalCityFilter = function (city) {
+      modalCityFilter = city;
+      updateCityPillStyles();
+      renderLocationModalList();
+    };
+
+    function updateCityPillStyles() {
+      const allPill = document.getElementById("city-pill-all");
+      if (allPill) allPill.textContent = `All (${LOCATIONS.length})`;
+      document.querySelectorAll(".city-filter-pill").forEach((btn) => {
+        const isSelected = btn.getAttribute("data-city") === modalCityFilter;
+        btn.className = isSelected
+          ? "city-filter-pill px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-600 text-white shrink-0 transition"
+          : "city-filter-pill px-3 py-1.5 rounded-full text-xs font-semibold bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 shrink-0 transition";
+      });
+    }
+
+    window.renderLocationModalList = function () {
+      const query = document.getElementById("location-search-input").value.trim().toLowerCase();
+      const listEl = document.getElementById("location-modal-list");
+      const filtered = LOCATIONS.filter((loc) => {
+        const matchesCity = modalCityFilter === "ALL" || loc.city === modalCityFilter;
+        const matchesQuery = !query || loc.name.toLowerCase().includes(query) || loc.city.toLowerCase().includes(query);
+        return matchesCity && matchesQuery;
+      });
+      if (filtered.length === 0) {
+        listEl.innerHTML = `<div class="p-8 text-center text-xs text-slate-500">No barangays found.</div>`;
+        return;
+      }
+      listEl.innerHTML = filtered.map((loc) => {
+        const isCurrent = loc.id === selectedDropoffId;
+        const tagHint = isSinalocLocation(loc) ? " • Est ₱50" : "";
+        return `
+          <button type="button" onclick="playTapSound(); selectDropoffFromModal('${loc.id}')"
+            class="w-full px-3.5 py-3 text-left rounded-xl flex items-center justify-between gap-3 transition ${isCurrent ? "bg-emerald-50 text-emerald-900" : "hover:bg-slate-50 text-slate-800"}">
+            <div class="min-w-0">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-700 block">${escapeHTML(loc.city)}${tagHint}</span>
+              <span class="text-sm font-bold block truncate">${escapeHTML(loc.name)}</span>
+            </div>
+            <i class="fa-solid ${isCurrent ? "fa-circle-check text-emerald-600" : "fa-chevron-right text-slate-300"} text-xs shrink-0"></i>
+          </button>
+        `;
+      }).join("");
+    };
+
+    window.selectDropoffFromModal = function (locId) {
+      selectedDropoffId = locId;
+      updateSelectedRouteUI();
+      closeLocationModal();
+    };
+
+    function stopLiveGpsWatcher() {
+      if (liveGpsWatchId !== null && "geolocation" in navigator) {
+        navigator.geolocation.clearWatch(liveGpsWatchId);
+        liveGpsWatchId = null;
+      }
+    }
+
+    async function pushLivePickupCoordinates(lat, lng, nearestName) {
+      if (!passengerActiveBookingId) return;
+      const now = Date.now();
+      if (now - lastLiveGpsPushMs < 3500) return;
+      lastLiveGpsPushMs = now;
+      const gpsLabel = `${nearestName} (${lat.toFixed(5)}, ${lng.toFixed(5)})`;
+      const activeBooking = allBookings.find((b) => b.id === passengerActiveBookingId);
+      const isSugoBooking = activeBooking && activeBooking.serviceType === "sugo";
+      const patch = isSugoBooking
+        ? { dropoffCoords: { lat, lng }, dropoffName: gpsLabel, dropoffMethod: "Live GPS" }
+        : { pickupCoords: { lat, lng }, pickupName: gpsLabel, pickupMethod: "Live GPS" };
+
+      if (isFirebaseLive && currentUser) {
+        try {
+          const docRef = doc(db, "artifacts", appId, "public", "data", "habal_bookings", passengerActiveBookingId);
+          await updateDoc(docRef, patch);
+        } catch (e) {}
+      } else if (activeBooking) {
+        Object.assign(activeBooking, patch);
+        broadcastLocalUpdate();
+        renderPassengerView();
+      }
+    }
+
+    window.triggerLiveGPS = function (showNotice = false) {
+      if (!currentPassengerAccount || !("geolocation" in navigator)) return;
+      const btn = document.getElementById("btn-use-gps");
+      const label = document.getElementById("btn-gps-label");
+      if (btn) btn.disabled = true;
+      if (label) label.textContent = "Locating...";
+      if (liveGpsWatchId !== null) navigator.geolocation.clearWatch(liveGpsWatchId);
+
+      liveGpsWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          if (btn) btn.disabled = false;
+          if (label) label.textContent = "Refresh GPS";
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          gpsAccuracyMeters = Math.round(pos.coords.accuracy || 0);
+          customPickupCoords = { lat, lng };
+          const nearest = findNearestLocation(lat, lng);
+          const gpsBadge = document.getElementById("gps-status-badge");
+          gpsBadge.classList.remove("hidden");
+          document.getElementById("gps-coords-text").innerHTML = `<i class="fa-solid fa-satellite-dish mr-1 text-emerald-600 animate-pulse"></i> ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+          document.getElementById("gps-accuracy-text").textContent = gpsAccuracyMeters > 0 ? `±${gpsAccuracyMeters}m` : "Live";
+          updateSelectedRouteUI();
+          pushLivePickupCoordinates(lat, lng, nearest.name);
+          if (showNotice) showToast("Live GPS updated!", "success");
+        },
+        () => {
+          if (btn) btn.disabled = false;
+          if (label) label.textContent = "Retry GPS";
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 1000 }
+      );
+    };
+
+    window.submitPassengerBooking = async function (e) {
+      e.preventDefault();
+      playTapSound();
+      if (!currentPassengerAccount) {
+        showToast("Please Log In first.", "warning");
+        return;
+      }
+
+      const isSugo = serviceMode === "sugo";
+      const sugoMessage = document.getElementById("input-sugo-message").value.trim();
+      const sugoStore = document.getElementById("input-sugo-store").value.trim();
+
+      if (isSugo) {
+        if (!sugoMessage) {
+          showToast("Ibutang sa Sugo Message kon unsa ang papalit.", "warning");
+          document.getElementById("input-sugo-message").focus();
+          return;
+        }
+        if (!sugoStore) {
+          showToast("Isulat asa paliton / store (required).", "warning");
+          document.getElementById("input-sugo-store").focus();
+          return;
+        }
+      }
+
+      if (!customPickupCoords) {
+        showToast("Please allow or tap 'Use My GPS' first.", "warning");
+        triggerLiveGPS(true);
+        return;
+      }
+      const route = await updateSelectedRouteUI();
+      if (!route) return;
+
+      const locNote = document.getElementById("input-pickup-note").value.trim();
+      const dNote = isSugo ? locNote : document.getElementById("input-dropoff-note").value.trim();
+
+      const btn = document.getElementById("btn-submit-booking");
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>Sending ${isSugo ? "Sugo" : "Booking"}...</span>`;
+
+      const gpsText = `${route.pickupLoc.name} (${route.pickupCoords.lat.toFixed(5)}, ${route.pickupCoords.lng.toFixed(5)})`;
+
+      const payload = {
+        serviceType: isSugo ? "sugo" : "ride",
+        sugoMessage: isSugo ? sugoMessage : "",
+        sugoStore: isSugo ? sugoStore : "",
+        passengerAccountId: currentPassengerAccount.id,
+        passengerName: currentPassengerAccount.name,
+        passengerPhone: currentPassengerAccount.phone,
+        pickupName: isSugo ? `Store: ${sugoStore}` : gpsText,
+        pickupMethod: isSugo ? "Store" : "Live GPS",
+        pickupNote: isSugo ? "" : locNote,
+        pickupCoords: isSugo ? null : route.pickupCoords,
+        dropoffName: isSugo ? gpsText : `${route.dropoffLoc.name}, ${route.dropoffLoc.city}`,
+        dropoffMethod: isSugo ? "Live GPS" : "Barangay",
+        dropoffNote: dNote,
+        dropoffCoords: isSugo ? route.pickupCoords : route.dropoffCoords,
+        distance: route.distance,
+        estimateFare: route.fare,
+        fare: route.fare,
+        meterStartedAtMs: null,
+        meterDistanceKm: 0,
+        meterTimeCharge: 0,
+        meterFare: fareConfig.baseFare,
+        status: "pending",
+        riderId: null,
+        riderName: null,
+        riderMotor: null,
+        riderPlate: null,
+        riderPhone: null,
+        riderCoords: null,
+        createdAtMs: Date.now()
+      };
+
+      try {
+        if (isFirebaseLive && currentUser) {
+          const colRef = collection(db, "artifacts", appId, "public", "data", "habal_bookings");
+          const docRef = await addDoc(colRef, { ...payload, createdAt: serverTimestamp() });
+          passengerActiveBookingId = docRef.id;
+        } else {
+          const newId = (isSugo ? "SG-" : "BK-") + Math.floor(10000 + Math.random() * 90000);
+          passengerActiveBookingId = newId;
+          allBookings.unshift({ id: newId, ...payload });
+          broadcastLocalUpdate();
+        }
+
+        if (isSugo) {
+          document.getElementById("input-sugo-message").value = "";
+          document.getElementById("input-sugo-store").value = "";
+        }
+
+        lastKnownStatus = "pending";
+        lastKnownMeterStarted = false;
+        localStorage.setItem(STORAGE_KEY_ACTIVE_PASSENGER_ID, passengerActiveBookingId);
+        playChimeSound();
+        renderPassengerView();
+        showToast(isSugo ? "Sugo sent! Finding a rider..." : "Booking sent! Finding a nearby rider...", "success");
+      } catch (err) {
+        showToast("Could not place request.", "error");
+      } finally {
+        btn.disabled = false;
+        const stillSugo = serviceMode === "sugo";
+        btn.innerHTML = `<i class="fa-solid ${stillSugo ? "fa-bag-shopping" : "fa-motorcycle"}"></i><span>${stillSugo ? "Send Sugo Now" : "Book Habal-Habal Now"}</span>`;
+      }
+    };
+
+    window.cancelActivePassengerBooking = async function () {
+      if (!passengerActiveBookingId) return;
+      const currentBooking = allBookings.find((b) => b.id === passengerActiveBookingId);
+      if (!currentBooking || currentBooking.status !== "pending") {
+        showToast("Rider is already assigned. Please call your rider to cancel.", "warning");
+        renderPassengerView();
+        return;
+      }
+      const ok = await askConfirm("Cancel Request?", "Cancel while no rider is assigned yet?");
+      if (!ok) return;
+
+      try {
+        if (isFirebaseLive && currentUser) {
+          const docRef = doc(db, "artifacts", appId, "public", "data", "habal_bookings", passengerActiveBookingId);
+          await updateDoc(docRef, { status: "cancelled" });
+        } else {
+          const item = allBookings.find((b) => b.id === passengerActiveBookingId);
+          if (item) item.status = "cancelled";
+          broadcastLocalUpdate();
+        }
+        stopLiveGpsWatcher();
+        passengerActiveBookingId = null;
+        lastKnownStatus = null;
+        lastKnownMeterStarted = false;
+        localStorage.removeItem(STORAGE_KEY_ACTIVE_PASSENGER_ID);
+        renderPassengerView();
+        showToast("Request cancelled.", "info");
+      } catch (e) {
+        showToast("Unable to cancel right now.", "error");
+      }
+    };
+
+    function formatElapsed(ms) {
+      const totalSec = Math.max(0, Math.floor(ms / 1000));
+      const mins = String(Math.floor(totalSec / 60)).padStart(2, "0");
+      const secs = String(totalSec % 60).padStart(2, "0");
+      return `${mins}:${secs}`;
+    }
+
+    function renderPassengerView() {
+      if (!currentPassengerAccount) return;
+      fareConfig = loadFareConfig();
+      const trackerCard = document.getElementById("passenger-tracker-card");
+      const bookingCard = document.getElementById("passenger-booking-card");
+
+      if (!passengerActiveBookingId) {
+        trackerCard.classList.add("hidden");
+        bookingCard.classList.remove("hidden");
+        updateBookingPreviewMap();
+        return;
+      }
+
+      const booking = allBookings.find((b) => b.id === passengerActiveBookingId);
+      if (!booking || booking.status === "cancelled") {
+        stopLiveGpsWatcher();
+        passengerActiveBookingId = null;
+        lastKnownStatus = null;
+        lastKnownMeterStarted = false;
+        localStorage.removeItem(STORAGE_KEY_ACTIVE_PASSENGER_ID);
+        trackerCard.classList.add("hidden");
+        bookingCard.classList.remove("hidden");
+        updateBookingPreviewMap();
+        if (booking && booking.status === "cancelled") {
+          showToast("Request was cancelled by rider.", "info");
+        }
+        return;
+      }
+
+      if (booking.status === "completed") {
+        stopLiveGpsWatcher();
+        passengerActiveBookingId = null;
+        lastKnownStatus = null;
+        lastKnownMeterStarted = false;
+        localStorage.removeItem(STORAGE_KEY_ACTIVE_PASSENGER_ID);
+        trackerCard.classList.add("hidden");
+        bookingCard.classList.remove("hidden");
+        updateBookingPreviewMap();
+        playChimeSound();
+        showToast(`Completed! Final fare: ₱${booking.fare || 0}.`, "success");
+        return;
+      }
+
+      if (lastKnownStatus === "pending" && booking.status === "accepted") {
+        playChimeSound();
+        showToast(`Rider ${booking.riderName || ""} accepted your request!`, "success");
+      }
+      lastKnownStatus = booking.status;
+
+      const meterStarted = Boolean(booking.meterStartedAtMs);
+      if (!lastKnownMeterStarted && meterStarted) {
+        playChimeSound();
+        showToast("Rider tapped Pick Up! Exact meter is now running.", "success");
+      }
+      lastKnownMeterStarted = meterStarted;
+
+      trackerCard.classList.remove("hidden");
+      bookingCard.classList.add("hidden");
+
+      const isSugo = booking.serviceType === "sugo";
+      const serviceBadge = document.getElementById("tracker-service-badge");
+      if (isSugo) {
+        serviceBadge.textContent = "SUGO";
+        serviceBadge.className = "text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800";
+      } else {
+        serviceBadge.textContent = "RIDE";
+        serviceBadge.className = "text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800";
+      }
+
+      const sugoBox = document.getElementById("tracker-sugo-box");
+      const sugoMsgEl = document.getElementById("tracker-sugo-message");
+      const sugoStoreEl = document.getElementById("tracker-sugo-store");
+
+      if (isSugo && booking.sugoMessage) {
+        sugoBox.classList.remove("hidden");
+        sugoMsgEl.textContent = booking.sugoMessage;
+        if (booking.sugoStore) {
+          sugoStoreEl.textContent = `Asa Paliton / Store: ${booking.sugoStore}`;
+          sugoStoreEl.classList.remove("hidden");
+        } else {
+          sugoStoreEl.classList.add("hidden");
+        }
+      } else {
+        sugoBox.classList.add("hidden");
+      }
+
+      const estVal = booking.estimateFare ?? booking.fare ?? 0;
+      const meterCalc = computeLiveMeterBreakdown(booking);
+
+      document.getElementById("tracker-booking-code").textContent = `Ref #${booking.id.slice(-6).toUpperCase()}`;
+      document.getElementById("tracker-fare-label").textContent = meterStarted ? "Exact Total" : "Estimate Fare";
+      document.getElementById("tracker-fare").textContent = `₱${meterStarted ? meterCalc.finalFare : estVal}`;
+
+      const trackerMeterBox = document.getElementById("tracker-meter-box");
+      const trackerMeterBadge = document.getElementById("tracker-meter-badge");
+      const trackerMeterTag = document.getElementById("tracker-meter-tag");
+      const meterBaseEl = document.getElementById("meter-line-base");
+      const meterDistEl = document.getElementById("meter-line-distance");
+      const meterTimeEl = document.getElementById("meter-line-time");
+      const meterTotalLabelEl = document.getElementById("meter-line-total-label");
+      const meterTotalEl = document.getElementById("meter-line-total");
+
+      if (booking.status === "accepted") {
+        trackerMeterBox.classList.remove("hidden");
+        meterBaseEl.textContent = `₱${meterCalc.baseFare}`;
+        if (meterStarted) {
+          trackerMeterBox.className = "rounded-xl border border-emerald-200 bg-emerald-50/70 p-3.5 space-y-2 transition";
+          trackerMeterBadge.className = "text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-600 text-white whitespace-nowrap";
+          trackerMeterBadge.textContent = "Picked Up • Meter Running";
+          trackerMeterTag.className = "text-[11px] font-extrabold text-emerald-700 whitespace-nowrap";
+          trackerMeterTag.textContent = "Live";
+          meterDistEl.textContent = `${meterCalc.mDist.toFixed(2)} km • ₱${meterCalc.distanceCharge}`;
+          meterTimeEl.textContent = `${formatElapsed(meterCalc.elapsedMs)} • ₱${meterCalc.timeCharge}`;
+          meterTotalLabelEl.textContent = "TOTAL (EXACT)";
+          meterTotalEl.textContent = `₱${meterCalc.finalFare}`;
+        } else {
+          trackerMeterBox.className = "rounded-xl border border-amber-200 bg-amber-50/70 p-3.5 space-y-2 transition";
+          trackerMeterBadge.className = "text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 whitespace-nowrap";
+          trackerMeterBadge.textContent = "Not Picked Up Yet • Standby";
+          trackerMeterTag.className = "text-[11px] font-bold text-slate-500 whitespace-nowrap";
+          trackerMeterTag.textContent = "Standby";
+          meterDistEl.textContent = `0.00 km • ₱0`;
+          meterTimeEl.textContent = `00:00 • ₱0`;
+          meterTotalLabelEl.textContent = "TOTAL (ESTIMATE)";
+          meterTotalEl.textContent = `₱${estVal}`;
+        }
+      } else {
+        trackerMeterBox.classList.add("hidden");
+      }
+
+      const pickupRow = document.getElementById("tracker-pickup-row");
+      const routeDivider = document.getElementById("tracker-route-divider");
+      const dropoffLabel = document.getElementById("tracker-dropoff-label");
+
+      if (isSugo) {
+        pickupRow.classList.add("hidden");
+        routeDivider.classList.add("hidden");
+        dropoffLabel.textContent = "Drop-off / Customer GPS";
+      } else {
+        pickupRow.classList.remove("hidden");
+        routeDivider.classList.remove("hidden");
+        dropoffLabel.textContent = "Drop-off Barangay";
+      }
+
+      document.getElementById("tracker-pickup-method").textContent = booking.pickupMethod || "Live GPS";
+      document.getElementById("tracker-dropoff-method").textContent = booking.dropoffMethod || "Barangay";
+      document.getElementById("tracker-pickup").textContent = booking.pickupName;
+      document.getElementById("tracker-dropoff").textContent = booking.dropoffName;
+
+      const pNoteEl = document.getElementById("tracker-pickup-note");
+      if (booking.pickupNote) {
+        pNoteEl.textContent = `"${booking.pickupNote}"`;
+        pNoteEl.classList.remove("hidden");
+      } else {
+        pNoteEl.classList.add("hidden");
+      }
+
+      const dNoteEl = document.getElementById("tracker-dropoff-note");
+      if (booking.dropoffNote) {
+        dNoteEl.textContent = `"${booking.dropoffNote}"`;
+        dNoteEl.classList.remove("hidden");
+      } else {
+        dNoteEl.classList.add("hidden");
+      }
+
+      const statusIcon = document.getElementById("tracker-status-icon");
+      const statusTitle = document.getElementById("tracker-status-title");
+      const riderBox = document.getElementById("tracker-rider-box");
+      const helperText = document.getElementById("tracker-helper-text");
+      const riderStage = document.getElementById("tracker-rider-stage");
+      const cancelBtn = document.getElementById("btn-passenger-cancel-ride");
+
+      if (booking.status === "accepted") {
+        statusIcon.className = "w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center";
+        statusIcon.innerHTML = `<i class="fa-solid ${isSugo ? "fa-bag-shopping" : "fa-motorcycle"}"></i>`;
+        statusTitle.className = "text-xs font-extrabold uppercase tracking-wider text-emerald-700";
+        statusTitle.textContent = meterStarted ? "In Progress • Meter Running" : "Rider Assigned • Heading to Customer";
+        riderBox.classList.remove("hidden");
+        riderStage.textContent = meterStarted ? "Picked Up • Meter Running" : "Rider Assigned • Pick Up Not Tapped Yet";
+        document.getElementById("tracker-rider-name").textContent = booking.riderName || "Rider";
+        document.getElementById("tracker-rider-vehicle").textContent = `${booking.riderMotor || "Motorcycle"} • ${booking.riderPlate || ""}`;
+        document.getElementById("tracker-call-rider-link").href = `tel:${booking.riderPhone || ""}`;
+
+        if (cancelBtn) {
+          cancelBtn.disabled = true;
+          cancelBtn.className = "min-h-[40px] px-3.5 rounded-xl bg-slate-100 text-slate-400 font-semibold text-xs border border-slate-200 cursor-not-allowed opacity-60 shrink-0";
+        }
+        helperText.textContent = "Rider assigned — call rider if you need to cancel.";
+      } else {
+        statusIcon.className = "w-10 h-10 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center animate-soft-pulse";
+        statusIcon.innerHTML = `<i class="fa-solid fa-magnifying-glass-location"></i>`;
+        statusTitle.className = "text-xs font-extrabold uppercase tracking-wider text-amber-600";
+        statusTitle.textContent = "Finding a Rider...";
+        riderBox.classList.add("hidden");
+        if (trackerMeterBox) trackerMeterBox.classList.add("hidden");
+
+        if (cancelBtn) {
+          cancelBtn.disabled = false;
+          cancelBtn.className = "min-h-[40px] px-3.5 rounded-xl bg-slate-100 hover:bg-red-50 text-slate-600 hover:text-red-600 font-semibold text-xs border border-slate-200 transition shrink-0";
+        }
+        helperText.textContent = "Waiting for an available rider...";
+      }
+
+      updatePassengerTrackerMap(booking);
+    }
+
+    setInterval(() => {
+      if (!currentPassengerAccount || !passengerActiveBookingId) return;
+      if (!isFirebaseLive) {
+        const latestLocal = loadLocalBookings();
+        const found = latestLocal.find((x) => x.id === passengerActiveBookingId);
+        if (found) {
+          allBookings = latestLocal;
+          renderPassengerView();
+          return;
+        }
+      }
+      const b = allBookings.find((x) => x.id === passengerActiveBookingId);
+      if (b && b.meterStartedAtMs) renderPassengerView();
+    }, 1000);
+
+    function escapeHTML(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    // Restore Passenger Session on Load
+    try {
+      const savedSession = localStorage.getItem(STORAGE_KEY_PASSENGER_SESSION);
+      if (savedSession) {
+        const parsed = JSON.parse(savedSession);
+        if (parsed && parsed.role === "passenger") {
+          currentPassengerAccount = parsed;
+        }
+      }
+    } catch (e) {}
+
+    setServiceMode("ride");
+    syncAuthGateUI();
+    initBroadcastChannel();
+    if (currentPassengerAccount) {
+      updateSelectedRouteUI();
+      triggerLiveGPS(false);
+    }
+    initStorageEngine();
+  </script>
+</body>
+</html>
